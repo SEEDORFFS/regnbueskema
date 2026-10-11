@@ -1781,6 +1781,10 @@ function docxTableBoxes(tbl){
   return out;
 }
 function median(a){if(!a.length)return 0;const s=a.slice().sort((x,y)=>x-y);return s[Math.floor(s.length/2)]}
+function allocMods(hs){const n=hs.length;if(n>=4)return hs.map(()=>1);const tot=hs.reduce((a,b)=>a+b,0)||1;const raw=hs.map(h=>h/tot*4);const m=raw.map(r=>Math.max(1,Math.floor(r)));
+  while(m.reduce((a,b)=>a+b,0)<4){let bi=0,bv=-1e9;raw.forEach((r,i)=>{if(r-m[i]>bv){bv=r-m[i];bi=i}});m[bi]++}
+  while(m.reduce((a,b)=>a+b,0)>4){let bi=-1;m.forEach((v,i)=>{if(v>1&&(bi<0||v>m[bi]))bi=i});if(bi<0)break;m[bi]--}return m}
+function rowStarts(mods){const st=[];let a=0;for(const v of mods){st.push(a);a+=v}return st}
 function analyzePage(boxes,ctxTitle){
   const hdr=boxes.filter(b=>{const l=(b.text||'').split('\n')[0];return WDRE.test(l)&&l.length<45});
   const days={};for(const b of hdr){const k=WDIDX[b.text.match(WDRE)[1].toLowerCase()];if(days[k])continue;
@@ -1801,26 +1805,34 @@ function analyzePage(boxes,ctxTitle){
     slotFor=y=>{let s=labels[0].slot;for(const l of labels)if(l.y<=y)s=l.slot;return s};}
   else{modH=median(cand.map(b=>b.h))||1;const tops=[];for(const t of cand.map(b=>b.y).sort((a,b)=>a-b))if(!tops.length||t-tops[tops.length-1]>modH*0.4)tops.push(t);
     slotFor=y=>{let s=0;tops.forEach((t,i)=>{if(t<=y)s=i});return tops.length>4?Math.min(3,Math.floor(s*4/tops.length)):Math.min(3,s)}}
+  /* tabel uden klokkeslæt: brug tabellens rækker. Færre end 4 rækker fordeles efter højde (fx 2+1+1) – brugeren kan rette fordelingen ved importen */
+  let rowInfo=null;
+  const rowOf=y=>{let r=0;rowInfo.ys.forEach((t,i)=>{if(t<=y)r=i});return r};
+  const place=(b,e)=>{if(rowInfo){const r0=rowOf(b.y+e),r1=Math.max(r0,rowOf(b.y+b.h-e));const st=rowStarts(rowInfo.mods);return{slot:st[r0],dur:Math.max(1,st[r1]+rowInfo.mods[r1]-st[r0]),r0,r1}}
+    const s0=slotFor(b.y+e);const e0=Math.max(s0,slotFor(b.y+b.h-e));return{slot:s0,dur:Math.max(1,Math.min(4-s0,e0-s0+1))}};
   const eps=modH*0.3;const lastY=ss.length?slotStarts[ss[ss.length-1]]+modH*0.9:Infinity;const LEG=/^(teori|praktik|værksted|vaerksted|matematik|grundfag|prøver?|studie|fri|vfu|eksamen)$/i;
   const INI=/^[A-ZÆØÅ]{2,4}(\s*(\/|\+|,|&|og)\s*[A-ZÆØÅ]{2,4})*$/;const teachBoxes=new Set();
   const rowsY={};for(const b of cand){const t=(b.text||'').trim();if(t&&INI.test(t)&&isWhite(b.fill)){const key=Math.round(b.y/Math.max(1,(hdrBot-hdrTop)*0.5));(rowsY[key]||(rowsY[key]=[])).push(b)}}
   for(const r of Object.values(rowsY)){const ks=new Set(r.map(b=>nearestDay(b.x+b.w/2)));if(ks.size>=3)for(const b of r){teachBoxes.add(b);const k=nearestDay(b.x+b.w/2);if(k!==null&&!days[k].teacher)days[k].teacher=b.text.trim()}}
   for(let i=cand.length-1;i>=0;i--)if(teachBoxes.has(cand[i]))cand.splice(i,1);
   if(teachBoxes.size&&ss.length<2){const tops=[];for(const t of cand.map(b=>b.y).sort((a,b)=>a-b))if(!tops.length||t-tops[tops.length-1]>modH*0.4)tops.push(t);slotFor=y=>{let s=0;tops.forEach((t,i)=>{if(t<=y)s=i});return tops.length>4?Math.min(3,Math.floor(s*4/tops.length)):Math.min(3,s)}}
+  if(ss.length<2&&gridTid){const gb=boxes.filter(b=>b.tid===gridTid&&!hdr.includes(b)&&!teachBoxes.has(b)&&b.y>=hdrBot-(hdrBot-hdrTop)*0.3);
+    if(gb.length){const ys=[...new Set(gb.map(b=>Math.round(b.y)))].sort((a,b)=>a-b);const bottom=Math.max(...gb.map(b=>b.y+b.h));
+      if(ys.length>=1&&ys.length<=4){const hs=ys.map((y,i)=>(ys[i+1]??bottom)-y);rowInfo={ys,hs,mods:allocMods(hs)}}}}
   const blocks=[];
   const wide=boxes.filter(b=>!hdr.includes(b)&&(!gridTid||b.tid===gridTid)&&b.w>colW*1.6&&(b.text||'').trim()&&b.y>=hdrBot-(hdrBot-hdrTop)*0.3&&b.y<=lastY);
-  for(const b of wide){for(const k of dk){const c=days[k];if(c.cx>b.x&&c.cx<b.x+b.w){const s0=slotFor(b.y+eps);const e0=Math.max(s0,slotFor(b.y+b.h-eps));blocks.push({k,slot:s0,dur:Math.max(1,Math.min(4-s0,e0-s0+1)),fill:isWhite(b.fill)?'none':b.fill,text:(b.text||'').trim(),y:b.y})}}}
-  for(const b of cand){if(b.y>lastY)continue;if(!gridTid&&LEG.test((b.text||'').trim())&&b.w<colW*0.85)continue;const k=nearestDay(b.x+b.w/2);const s=slotFor(b.y+eps);const e=Math.max(s,slotFor(b.y+b.h-eps));
-    blocks.push({k,slot:s,dur:Math.max(1,Math.min(4-s,e-s+1)),fill:isWhite(b.fill)?'none':b.fill,text:(b.text||'').trim(),y:b.y})}
+  for(const b of wide){for(const k of dk){const c=days[k];if(c.cx>b.x&&c.cx<b.x+b.w){blocks.push({k,...place(b,rowInfo?Math.min(eps,b.h*0.3):eps),fill:isWhite(b.fill)?'none':b.fill,text:(b.text||'').trim(),y:b.y})}}}
+  for(const b of cand){if(b.y>lastY)continue;if(!gridTid&&LEG.test((b.text||'').trim())&&b.w<colW*0.85)continue;const k=nearestDay(b.x+b.w/2);
+    blocks.push({k,...place(b,rowInfo?Math.min(eps,b.h*0.3):eps),fill:isWhite(b.fill)?'none':b.fill,text:(b.text||'').trim(),y:b.y})}
   blocks.sort((a,b)=>a.k-b.k||a.slot-b.slot||a.y-b.y);
-  const merged=[];for(const b of blocks){const p=merged.filter(x=>x.k===b.k).pop();if(p&&p.fill===b.fill&&p.slot+p.dur===b.slot&&(!b.text||(b.text===p.text&&b.slot!==2))){p.dur+=b.dur;continue}if(p&&p.slot===b.slot&&p.fill===b.fill&&p.text===b.text)continue;merged.push(b)}
-  const legend={};const LW=/^(teori|praktik|værksted|vaerksted|matematik|grundfag|prøver?|studie|vfu|eksamen)$/i;
+  const merged=[];for(const b of blocks){const p=merged.filter(x=>x.k===b.k).pop();if(p&&p.fill===b.fill&&p.slot+p.dur===b.slot&&(!b.text||(b.text===p.text&&b.slot!==2))){p.dur+=b.dur;if(b.r1!==undefined)p.r1=b.r1;continue}if(p&&p.slot===b.slot&&p.fill===b.fill&&p.text===b.text)continue;merged.push(b)}
+  const legend={};const LW=/^(teori|praktik|værksted|vaerksted|matematik|grundfag|(gf2\s*)?prøver?|studie(ture?)?|vfu|eksamen)$/i;
   for(const b of boxes){const t=(b.text||'').trim();if(!LW.test(t))continue;const g=guessCat(t);if(!g)continue;
     if(b.fill&&!isWhite(b.fill))legend[b.fill]=g;
     const sw=boxes.find(o=>o!==b&&!(o.text||'').trim()&&o.fill&&!isWhite(o.fill)&&Math.abs(o.y-b.y)<b.h*0.5&&Math.abs(o.x-(b.x+b.w))<b.w*0.3);if(sw)legend[sw.fill]=g}
   let weekNo=null,label='';const all=[ctxTitle||'',...boxes.filter(b=>!hdr.includes(b)).sort((a,b)=>a.y-b.y).map(b=>b.text||'')];
   for(const t of all){let m=t.match(/uge\s*(\d{1,2})/i);if(m){weekNo=+m[1];const ls=t.split('\n');let li=-1;ls.forEach((l,i)=>{if(/uge\s*\d/i.test(l))li=i});m=ls[li].match(/uge\s*(\d{1,2})/i);weekNo=+m[1];label=ls[li].replace(/[-–:]?\s*uge\s*\d{1,2}.*$/i,'').trim();if(!label&&li>0&&ls[li-1].length<40)label=ls[li-1].trim();if(label&&label.length>6&&/\s/.test(label)&&label===label.toUpperCase())label=label.charAt(0)+label.slice(1).toLowerCase();break}}
-  return{days,blocks:merged.filter(b=>b.text||b.fill!=='none'),legend,weekNo,label};
+  return{days,blocks:merged.filter(b=>b.text||b.fill!=='none'),legend,weekNo,label,head:all.slice(0,8).join('\n').slice(0,600),rowMods:rowInfo&&rowInfo.mods.length<4?rowInfo.mods:null};
 }
 async function parsePPTX(zip){
   const theme=themeColors(await zip.file('ppt/theme/theme1.xml')?.async('string'));
@@ -1855,12 +1867,20 @@ async function readOldFile(f){
     if(zip.file('ppt/presentation.xml'))pages=await parsePPTX(zip);else if(zip.file('word/document.xml'))pages=await parseDOCX(zip);else throw new Error('Filen er hverken en PowerPoint- eller Word-fil.');
     if(!pages.length)throw new Error('Fandt ingen skemauger. Appen leder efter ugedage (Mandag–Fredag) som kolonneoverskrifter – i dias eller i en tabel.');
     let year=new Date().getFullYear();try{const core=await zip.file('docProps/core.xml')?.async('string');const m=core&&core.match(/<dcterms:created[^>]*>(\d{4})-(\d{2})/);if(m)year=+m[1]}catch(e){}
+    const fileYear=(f.name.match(/(?:^|\D)(20\d\d)(?:\D|$)/)||[])[1];
     const fp=pages.find(p=>Object.values(p.days).some(d=>d.d&&d.m));
+    if(!fp){/* ingen datoer i dagsoverskrifterne: brug fx „uge 5 · 26. jan – 30. jan“ i overskriften, ellers årstal i filnavnet */
+      const MON={jan:1,feb:2,mar:3,apr:4,maj:5,jun:6,jul:7,aug:8,sep:9,okt:10,nov:11,dec:12};const hits=[];
+      for(const p of pages){if(!p.weekNo||!p.head)continue;const m=p.head.match(/(\d{1,2})\.?\s*(jan|feb|mar|apr|maj|jun|jul|aug|sep|okt|nov|dec)/i);if(m)hits.push({d:+m[1],m:MON[m[2].toLowerCase()],w:p.weekNo})}
+      const base=fileYear?+fileYear:year;
+      if(hits.length){let best=base,bs=-1;for(let Y=base-4;Y<=base+2;Y++){let sc=0;for(const h of hits){const ds=`${Y}-${String(h.m).padStart(2,'0')}-${String(h.d).padStart(2,'0')}`;if(isoWeek(ds)===h.w&&wd(ds)<=4)sc++}if(sc>bs||(sc===bs&&Math.abs(Y-base)<Math.abs(best-base))){bs=sc;best=Y}}year=best}
+      else if(fileYear)year=+fileYear}
     if(fp){const ks=Object.keys(fp.days).filter(k=>fp.days[k].d&&fp.days[k].m);const explicit=ks.map(k=>fp.days[k].y).find(Boolean);
       if(explicit)year=explicit;else{let best=year,bs=-1;for(let Y=year-4;Y<=year+2;Y++){let sc=0;for(const k of ks){const dd=fp.days[k];const ds=`${Y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`;if(wd(ds)===+k)sc++}if(fp.weekNo){const dd=fp.days[ks[0]];if(isoWeek(`${Y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`)===fp.weekNo)sc+=2}if(sc>bs||(sc===bs&&Math.abs(Y-year)<Math.abs(best-year))){bs=sc;best=Y}}year=best}}
     imp.year=year;imp.name=f.name.replace(/\.(pptx|docx)$/i,'').replace(/[_-]+/g,' ').trim();
     const fills={};const legend={};for(const p of pages){Object.assign(legend,p.legend);for(const b of p.blocks){const e=fills[b.fill]||(fills[b.fill]={n:0,texts:[],guess:{}});e.n++;if(b.text&&e.texts.length<4&&!e.texts.includes(b.text.split('\n')[0]))e.texts.push(b.text.split('\n')[0]);const g=guessCat(b.text);if(g)e.guess[g]=(e.guess[g]||0)+1}}
     imp.map={};for(const[f2,e]of Object.entries(fills)){if(e.texts.length&&e.texts.every(t=>DAYOFF.test(t.trim()))){imp.map[f2]='';continue}const g=Object.entries(e.guess).sort((a,b)=>b[1]-a[1])[0];imp.map[f2]=legend[f2]||(f2==='none'?'guess':nearestCat(f2))||(g&&g[1]>=e.n*0.5?g[0]:'')||'guess'}
+    const rp={};for(const p of pages)if(p.rowMods){const k=p.rowMods.join(',');rp[k]=(rp[k]||0)+1}const best=Object.entries(rp).sort((a,b)=>b[1]-a[1])[0];imp.rowPlan=best?best[0].split(',').map(Number):null;imp.rowPages=Object.values(rp).reduce((a,b)=>a+b,0);
     imp.res={pages,fills};
   }catch(e){imp.err=e.message||'Filen kunne ikke læses.'}
   imp.busy=false;renderImp();
@@ -1894,7 +1914,8 @@ function impCollect(){
     const pl=weekPeriod(p);if(pl){out.periods.push({type:/vfu/i.test(pl)?'vfu':'ferie',label:pl,from:mon,to:add(mon,4)});out.weeks[mon]={label:pl};continue}
     if(p.label)out.weeks[mon]={label:p.label};
     for(const k in p.days)if(p.days[k].teacher)out.days[add(mon,+k)]={teacher:p.days[k].teacher};
-    for(const b of p.blocks){const d=add(mon,b.k);const first=trivName(b.text.split('\n')[0]);
+    const plan=p.rowMods&&imp.rowPlan&&imp.rowPlan.length===p.rowMods.length?imp.rowPlan:null;
+    for(const b0 of p.blocks){const b=plan&&b0.r0!==undefined?Object.assign({},b0,(()=>{const st=rowStarts(plan);return{slot:st[b0.r0],dur:Math.max(1,st[b0.r1]+plan[b0.r1]-st[b0.r0])}})()):b0;const d=add(mon,b.k);const first=trivName(b.text.split('\n')[0]);
       if(DAYOFF.test(first)){const prev=out.periods[out.periods.length-1];if(prev&&prev.label===first&&d>prev.to&&d<=add(prev.to,3))prev.to=d;else if(!out.periods.some(x=>d>=x.from&&d<=x.to))out.periods.push({type:/vfu/i.test(first)?'vfu':'ferie',label:first,from:d,to:d});continue}
       let cat=imp.map[b.fill];if(!cat)continue;if(cat==='guess')cat=guessCat(b.text)||'teori';if(!state.categories.some(x=>x.id===cat))continue;
       out.blocks.push(Object.assign({date:d,slot:b.slot,dur:b.dur,cat,hasText:!!b.text.trim()},nameDesc(b.text,cat)))}
@@ -1905,7 +1926,7 @@ function impCourse(col,link){
   const W=col.W;const c=newCourse({name:imp.name||'Importeret skema',start:W[0].mon,end:add(W[W.length-1].mon,4),note:'Importeret fra '+imp.file});
   c.periods=col.periods.map(p=>Object.assign({id:uid()},p));c.weeks=clone(col.weeks);c.days=clone(col.days);
   const per={};
-  for(const b of col.blocks){c.items.push({id:uid(),date:b.date,slot:b.slot,dur:b.dur,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:true});per[b.date]=Math.max(per[b.date]||0,b.slot+b.dur)}
+  for(const b of col.blocks){c.items.push({id:uid(),date:b.date,slot:b.slot,dur:b.dur,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:!!imp.asPh});per[b.date]=Math.max(per[b.date]||0,b.slot+b.dur)}
   const ends=[[],[],[],[],[]];for(const d in per)ends[wd(d)].push(per[d]);
   c.dayModules=c.dayModules.map((def,k)=>{const a=ends[k];if(!a.length)return def;const cnt={};a.forEach(v=>cnt[v]=(cnt[v]||0)+1);return +Object.entries(cnt).sort((x,y)=>y[1]-x[1]||y[0]-x[0])[0][0]});
   return c;
@@ -1942,17 +1963,19 @@ function impApply(){
   if(imp.mode!=='acts'){c=impCourse(col,imp.mode==='both'?b=>varMap[b.name]||null:null);state.courses[c.id]=c;state.currentId=c.id;ui.view='overview';ui.weekMon=null;ui.sel=null;undoStack.length=0;redoStack.length=0}
   closeModal();store.metaDirty=true;changed();
   const addIds=new Set(add.map(l=>l.id));
-  const msg=[c?`Grovskemaet „${c.name}“ er oprettet (${c.items.length} blokke)`:'',add.length?`${add.length} aktiviteter tilføjet biblioteket`:''].filter(Boolean).join(' · ')||'Intet blev importeret';
+  const msg=[c?`Skemaet „${c.name}“ er oprettet (${c.items.length} blokke)`:'',add.length?`${add.length} aktiviteter tilføjet biblioteket`:''].filter(Boolean).join(' · ')||'Intet blev importeret';
   toast(msg,'Fortryd import',()=>{if(c){delete state.courses[c.id];store.deleted.add(c.id);state.currentId=state.courses[prevId]?prevId:Object.keys(state.courses)[0];ui.weekMon=null;ui.sel=null}state.library=state.library.filter(l=>!addIds.has(l.id));store.metaDirty=true;changed();toast('Importen er fortrudt')});
 }
-function openImp(){imp.res=null;imp.err='';imp.step=1;imp.mode='rough';imp.sugg=null;
+function openImp(){imp.res=null;imp.err='';imp.step=1;imp.mode='rough';imp.asPh=false;imp.sugg=null;
   openModal(`<div class="modal-h"><div><h2>Importér gammelt skema</h2><p id="imp-steps"></p></div><button type="button" class="btn ghost icon" data-close aria-label="Luk">✕</button></div><div class="modal-b" id="imp"></div><div class="modal-f" id="imp-foot"></div>`);
   $('modal-body').closest('.modal').classList.add('wide');renderImp();const box=$('modal-body');
   box.onchange=e=>{const t=e.target;
     if(t.id==='imp-file'&&t.files[0]){readOldFile(t.files[0]);return}
     if(t.dataset.im!==undefined){imp.map[t.dataset.im]=t.value;renderImp();return}
+    if(t.dataset.rowplan!==undefined){imp.rowPlan=t.value.split(',').map(Number);return}
     if(t.id==='imp-year'){imp.year=parseInt(t.value)||imp.year;renderImp();return}
     if(t.name==='imp-mode'){imp.mode=t.value;renderImp();return}
+    if(t.id==='imp-asph'){imp.asPh=t.checked;return}
     const r=t.closest('[data-sid]');if(r){const s=imp.sugg.find(x=>x.id===r.dataset.sid);if(!s)return;if(t.dataset.sc!==undefined)s.checked=t.checked;if(t.dataset.scat!==undefined)s.cat=t.value;renderImpCount();return}};
   box.oninput=e=>{const t=e.target;if(t.id==='imp-name'){imp.name=t.value;return}if(t.id==='imp-q'){imp.q=t.value;renderImpList();return}const r=t.closest('[data-sid]');if(r&&t.dataset.sn!==undefined){const s=imp.sugg.find(x=>x.id===r.dataset.sid);if(s)s.name=t.value}};
   box.onclick=e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.ia;if(!a)return;
@@ -1976,18 +1999,21 @@ function renderImp(){
     const W=impWeeks();const nb=imp.res.pages.reduce((a,p)=>a+p.blocks.length,0);const per=W.filter(w=>weekPeriod(w.p));
     h=`<div class="gen-sum"><b>${esc(imp.file)}</b>: ${W.length} uger (uge ${isoWeek(W[0].mon)} ${D(W[0].mon).getUTCFullYear()} – uge ${isoWeek(W[W.length-1].mon)} ${D(W[W.length-1].mon).getUTCFullYear()}), ${nb} felter.${per.length?` Ferie/VFU: ${per.map(w=>esc(weekPeriod(w.p))+' (uge '+isoWeek(w.mon)+')').join(', ')}.`:''}</div>
     <div class="src-opt imp-modes">
-      <label><input type="radio" name="imp-mode" value="rough" ${imp.mode==='rough'?'checked':''}><span><b>Grovskema</b> <span class="tag">Anbefalet til gamle skemaer</span><br><span class="small muted">Et nyt forløb med farvede pladsholdere på de samme pladser og med al den oprindelige tekst. Biblioteket røres ikke.</span></span></label>
+      <label><input type="radio" name="imp-mode" value="rough" ${imp.mode==='rough'?'checked':''}><span><b>Skema</b> <span class="tag">Anbefalet til gamle skemaer</span><br><span class="small muted">Et nyt forløb med blokkene på de samme pladser, i de samme farver og med al den oprindelige tekst. Biblioteket røres ikke.</span></span></label>
       <label><input type="radio" name="imp-mode" value="acts" ${imp.mode==='acts'?'checked':''}><span><b>Aktiviteter</b><br><span class="small muted">Gennemse og vælg, hvilke aktiviteter der skal i biblioteket. Der oprettes intet skema.</span></span></label>
-      <label><input type="radio" name="imp-mode" value="both" ${imp.mode==='both'?'checked':''}><span><b>Begge dele</b><br><span class="small muted">Grovskema + de aktiviteter, du godkender. Blokkene kobles til de godkendte aktiviteter.</span></span></label>
+      <label><input type="radio" name="imp-mode" value="both" ${imp.mode==='both'?'checked':''}><span><b>Begge dele</b><br><span class="small muted">Skema + de aktiviteter, du godkender. Blokkene kobles til de godkendte aktiviteter.</span></span></label>
     </div>`;
+    if(imp.mode!=='acts')h+=`<label class="toggle"><input type="checkbox" id="imp-asph" ${imp.asPh?'checked':''}> Vis blokkene som pladsholdere (stribede), så jeg kan trække aktiviteter fra biblioteket ind over dem</label>`;
     if(imp.mode!=='acts')h+=`<div class="fgrid"><div class="fld"><label for="imp-name">Navn på forløbet</label><input type="text" id="imp-name" value="${esc(imp.name)}"></div><div class="fld"><label for="imp-year">Skemaets første uge ligger i år</label><input type="number" id="imp-year" min="2000" max="2100" value="${imp.year}"></div></div>`;
+    if(imp.rowPlan){const n=imp.rowPlan.length;const opts=n===3?[[2,1,1],[1,2,1],[1,1,2],[1,1,1]]:n===2?[[2,2],[3,1],[1,3],[1,1]]:[[4],[1]];const lab=a=>{let s=1;return a.map((v,i)=>{const t=`række ${i+1} = modul ${v>1?s+'–'+(s+v-1):s}`;s+=v;return t}).join(', ')+(a.reduce((x,y)=>x+y,0)<4?' (kun '+a.reduce((x,y)=>x+y,0)+' moduler)':'')};
+      h+=`<div class="fld"><label for="imp-rows">Skemaet har ${n} rækker pr. dag og ingen klokkeslæt (${imp.rowPages} uger). Hvordan passer rækkerne til modulerne?</label><select id="imp-rows" data-rowplan>${opts.map(a=>`<option value="${a.join(',')}" ${a.join(',')===imp.rowPlan.join(',')?'selected':''}>${lab(a)}</option>`).join('')}</select><span class="small muted">Forslaget bygger på rækkernes højde. Uger med 4 rækker læses som ét modul pr. række.</span></div>`}
     h+=`<div><div class="lbl-s" style="margin-bottom:4px">Hvad betyder farverne?</div>${Object.entries(imp.res.fills).sort((a,b)=>b[1].n-a[1].n).map(([f,e])=>`<div class="map-row imp-row"><span><i class="sw" style="background:${f==='none'?'transparent':'#'+f}"></i>${f==='none'?'Uden farve':''} <span class="muted small">${e.texts.map(esc).join(' · ')||'(tomme felter)'}</span></span><span class="muted small">${e.n}×</span><select data-im="${f}" aria-label="Kategori" style="--gc:${imp.map[f]&&imp.map[f]!=='guess'?catOf(imp.map[f]).color:'transparent'}"><option value="">Spring over</option><option value="guess" ${imp.map[f]==='guess'?'selected':''}>Gæt ud fra teksten</option>${state.categories.map(k=>`<option value="${k.id}" ${k.id===imp.map[f]?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>`).join('')}</div>`;
-    el.innerHTML=h;foot.innerHTML=`<button class="btn" data-ia="back">← Vælg en anden fil</button><button class="btn primary" data-ia="next">${imp.mode==='rough'?'Opret grovskema':'Næste: Gennemse aktiviteter →'}</button>`;return}
+    el.innerHTML=h;foot.innerHTML=`<button class="btn" data-ia="back">← Vælg en anden fil</button><button class="btn primary" data-ia="next">${imp.mode==='rough'?'Opret skema':'Næste: Gennemse aktiviteter →'}</button>`;return}
   el.innerHTML=`<div class="imp-top"><span id="imp-count"></span><input type="search" id="imp-q" placeholder="Søg i forslagene" value="${esc(imp.q)}" aria-label="Søg i forslagene"><button class="btn sm" data-ia="all">Vælg alle viste</button><button class="btn sm" data-ia="none">Fravælg alle viste</button></div><div id="imp-list"></div><p class="small muted">Dit nuværende bibliotek ændres aldrig. Afkrydsede forslag tilføjes som nye aktiviteter. Forudvalgt er dem, der går igen mindst 2 gange og ikke ligner noget, du allerede har.</p>`;
   renderImpList();
 }
 function renderImpCount(){const n=imp.sugg.filter(s=>s.checked&&!s.exists).length;const c=$('imp-count');if(c)c.innerHTML=`<b>${n}</b> af ${imp.sugg.filter(s=>!s.exists).length} valgt`;
-  const foot=$('imp-foot');if(foot)foot.innerHTML=`<button class="btn" data-ia="back">← Tilbage</button><button class="btn primary" data-ia="apply">${imp.mode==='both'?`Opret grovskema og tilføj ${n} aktiviteter`:`Tilføj ${n} aktiviteter til biblioteket`}</button>`}
+  const foot=$('imp-foot');if(foot)foot.innerHTML=`<button class="btn" data-ia="back">← Tilbage</button><button class="btn primary" data-ia="apply">${imp.mode==='both'?`Opret skema og tilføj ${n} aktiviteter`:`Tilføj ${n} aktiviteter til biblioteket`}</button>`}
 function renderImpList(){
   const L=impVisible();const byId=Object.fromEntries(imp.sugg.map(s=>[s.id,s]));
   let h='';
@@ -2116,7 +2142,7 @@ function readGenFile(f){
 function openGen(){
   const c=cur();const tw=teachingWeeks(c);if(!tw.length){toast('Forløbet har ingen undervisningsuger');return}
   if(!gen.pat)gen.pat=genPatGet();if(!gen.from||!tw.includes(gen.from))gen.from=tw[0];if(!gen.to||!tw.includes(gen.to))gen.to=tw[tw.length-1];
-  openModal(`<div class="modal-h"><div><h2>Grovskema</h2><p>Fyld forløbet med farvede pladsholdere for teori, værksted m.m. Bagefter trækker du aktiviteter fra biblioteket ind over dem.</p></div><button type="button" class="btn ghost icon" data-close aria-label="Luk">✕</button></div><div class="modal-b" id="gen"></div><div class="modal-f"><button class="btn danger" id="gen-clear" data-confirm="Klik igen – alle pladsholdere fjernes">Fjern alle pladsholdere</button><div class="btnrow"><button class="btn" data-close>Luk</button><button class="btn primary" id="gen-go">Generér</button></div></div>`);
+  openModal(`<div class="modal-h"><div><h2>Grovskema</h2><p>Fyld forløbet med farvede pladsholdere for teori, værksted m.m. Bagefter trækker du aktiviteter fra biblioteket ind over dem.</p></div><button type="button" class="btn ghost icon" data-close aria-label="Luk">✕</button></div><div class="modal-b" id="gen"></div><div class="modal-f"><div class="btnrow"><button class="btn danger" id="gen-clear" data-confirm="Klik igen – alle pladsholdere fjernes">Fjern alle pladsholdere</button><button class="btn" id="gen-unph" title="Pladsholderne beholder tekst og placering, men får fuld farve">Gør alle pladsholdere til almindelige blokke</button></div><div class="btnrow"><button class="btn" data-close>Luk</button><button class="btn primary" id="gen-go">Generér</button></div></div>`);
   $('modal-body').closest('.modal').classList.add('wide');renderGen();
   const box=$('modal-body');
   box.onchange=e=>{const t=e.target;
@@ -2130,6 +2156,7 @@ function openGen(){
   };
   box.onclick=e=>{const t=e.target;const tb=t.closest('[data-gt]');if(tb){gen.tab=tb.dataset.gt;renderGen();return}
     if(t.id==='gen-reset'){gen.pat=clone(GEN_DEFAULT);genPatSave();renderGen();return}
+    if(t.id==='gen-unph'){const c2=cur();const L=c2.items.filter(i=>i.ph);if(!L.length){toast('Der er ingen pladsholdere i dette forløb');return}mutate(()=>{L.forEach(i=>{i.ph=false})});renderGen();toast(`${L.length} pladsholdere er nu almindelige blokke`,'Fortryd',undo);return}
     if(t.id==='gen-clear'&&t.dataset.armedc){const c2=cur();const n=c2.items.filter(i=>i.ph).length;mutate(()=>{c2.items=c2.items.filter(i=>!i.ph||i.locked)});renderGen();toast(`${n} pladsholdere fjernet`,'Fortryd',undo);return}
     if(t.id==='gen-go'){runGen();return}
   };
@@ -2381,7 +2408,8 @@ function resetUI(){ui.sel=null;ui.weekMon=null;ui.focusDate=null;undoStack.lengt
 function loadWorkspace(st){state=st;state.categories=state.categories||defaultCategories();state.library=state.library||[];resetUI();saveLocal();renderAll();if(fh)fileSaveSoon()}
 async function writeFile(){if(!fh)return;if(state.imgsMissing)throw new Error('imgs');const w=await fh.createWritable();await w.write(JSON.stringify({app:'regnbueskema',kind:'workspace',version:1,saved:new Date().toISOString(),state:stateForSave()}));await w.close()}
 function fileSaveSoon(){clearTimeout(fileTimer);setSave('saving','Gemmer…');fileTimer=setTimeout(async()=>{if(fileBusy){fileSaveSoon();return}fileBusy=true;try{await writeFile();setFileStatus()}catch(e){fh=null;setSave('warn','Kunne ikke gemme i filen – klik for at vælge igen')}fileBusy=false},700)}
-function setFileStatus(){if(fh)setSave('ok','Gemt i '+fh.name);else if(pendingHandle)setSave('warn','Klik for at fortsætte i '+pendingHandle.name);else setSave('warn',fsOK?'Kun i browseren – klik for at gemme i en fil':'Kun i browseren – husk „Gem projektfil“')}
+let _fileMode=null;
+function setFileStatus(){const m=fh?'file':pendingHandle?'pending':'none';if(_fileMode!==null&&m!==_fileMode){_fileMode=m;const ae=document.activeElement;if(!(ae&&$('right-body').contains(ae)&&ae.matches('input,textarea,select')))renderRight()}_fileMode=m;if(fh)setSave('ok','Gemt i '+fh.name);else if(pendingHandle)setSave('warn','Klik for at fortsætte i '+pendingHandle.name);else setSave('warn',fsOK?'Kun i browseren – klik for at gemme i en fil':'Kun i browseren – husk „Gem projektfil“')}
 async function fileConnect(){
   if(!fsOK){toast('Denne browser kan ikke gemme direkte i en fil. Brug Chrome eller Edge, eller „Gem projektfil“.');return}
   if(state.imgsMissing){toast('Åbn først din arbejdsfil (Filer → Åbn arbejdsfil) – billederne ligger i den');return}
