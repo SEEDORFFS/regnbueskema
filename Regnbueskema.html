@@ -2384,11 +2384,17 @@ function drawWeekPage(doc,c,m,pi){
       for(const i of list){const k2=catOf(i.cat);const[r,g,b]=hexRGB(k2.color);const lw=(colW-2)/n;const ix=x+1+lo[i.id]*lw,iy=Y0+i.slot*rowHh+1,iw=lw-(n>1?1:0),ih=Math.min(i.dur,M-i.slot)*rowHh-2;
         if(doc.hits)doc.hits.push({id:i.id,x:ix,y:iy,w:iw,h:ih});
         doc.setFillColor(r,g,b);doc.roundedRect(ix,iy,iw,ih,2.5,2.5,'F');const tc=textOn(k2.color)==='#FFFFFF'?255:20;doc.setTextColor(tc,tc,tc);
-        let tw=iw-4;const pim=(i.images||[]).map(imgSrc).find(Boolean);
-        if(pim&&iw>=40&&ih>=14){let ar=4/3;try{const pr=doc.getImageProperties(pim);if(pr&&pr.width&&pr.height)ar=pr.width/pr.height}catch(e){}let pw=Math.min(iw*.42,26),ph=pw/ar;if(ph>ih-4){ph=ih-4;pw=ph*ar}try{doc.addImage(pim,'JPEG',ix+iw-pw-1.5,iy+ih-ph-2,pw,ph,undefined,'FAST');tw=iw-4-pw-1.5}catch(e){}}
-        doc.setFont('helvetica','bold');doc.setFontSize(9);const nl=doc.splitTextToSize(pdfTxt(i.name),tw);doc.text(nl.slice(0,3),ix+2,iy+4.5);
+        let tw=iw-4;const pim=(i.images||[]).map(imgSrc).find(Boolean);let ar=4/3;
+        if(pim){try{const pr=doc.getImageProperties(pim);if(pr&&pr.width&&pr.height)ar=pr.width/pr.height}catch(e){}}
         const LK=goodLinks(i).slice(0,3);const lkH=LK.length*3.2;
-        if(i.desc){doc.setFont('helvetica','normal');doc.setFontSize(7.5);const maxL=Math.max(0,Math.floor((ih-5-lkH-nl.slice(0,3).length*3.6)/3.1));const dl=doc.splitTextToSize(pdfTxt(i.desc),tw).slice(0,maxL);if(dl.length)doc.text(dl,ix+2,iy+4.5+nl.slice(0,3).length*3.7)}
+        const lay=w=>{doc.setFont('helvetica','bold');doc.setFontSize(9);const nl=doc.splitTextToSize(pdfTxt(i.name),w).slice(0,3);doc.setFont('helvetica','normal');doc.setFontSize(7.5);const maxL=Math.max(0,Math.floor((ih-5-lkH-nl.length*3.6)/3.1));const dl=i.desc?doc.splitTextToSize(pdfTxt(i.desc),w).slice(0,maxL):[];return{nl,dl}};
+        let{nl,dl}=lay(tw);
+        /* billedet får pladsen under teksten (sidste prioritet); er der for lidt, lægges det lille i hjørnet som før */
+        if(pim){const top=iy+4.5+(nl.length-1)*3.7+(dl.length?3.7+(dl.length-1)*3.1:0)+2.5;const avH=iy+ih-2-(LK.length?lkH+1.5:0)-top;
+          if(avH>=12){let pw=iw-4,ph=pw/ar;if(ph>avH){ph=avH;pw=ph*ar}try{doc.addImage(pim,'JPEG',ix+(iw-pw)/2,top,pw,ph,undefined,'FAST')}catch(e){}}
+          else if(iw>=40&&ih>=14){let pw=Math.min(iw*.42,26),ph=pw/ar;if(ph>ih-4){ph=ih-4;pw=ph*ar}try{doc.addImage(pim,'JPEG',ix+iw-pw-1.5,iy+ih-ph-2,pw,ph,undefined,'FAST');tw=iw-4-pw-1.5;({nl,dl}=lay(tw))}catch(e){}}}
+        doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(nl,ix+2,iy+4.5);
+        if(dl.length){doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.text(dl,ix+2,iy+4.5+nl.length*3.7)}
         if(LK.length&&ih>=12){doc.setFont('helvetica','bold');doc.setFontSize(7);LK.forEach((l,j)=>{const ly=iy+ih-2-(LK.length-1-j)*3.2;const lab=doc.splitTextToSize(pdfTxt('> '+linkLabel(l)),tw)[0];doc.textWithLink(lab,ix+2,ly,{url:safeHref(l.url)});const w=doc.getTextWidth(lab);doc.setDrawColor(tc,tc,tc);doc.setLineWidth(.15);doc.line(ix+2,ly+.6,ix+2+w,ly+.6)})}}
     }
     let lx=10;doc.setFontSize(8);state.categories.filter(k=>k.id!=='fri').forEach(k=>{const[r,g,b]=hexRGB(k.color);doc.setFillColor(r,g,b);doc.roundedRect(lx,186,24,6,1.5,1.5,'F');const tc=textOn(k.color)==='#FFFFFF'?255:20;doc.setTextColor(tc,tc,tc);doc.setFont('helvetica','bold');doc.text(pdfTxt(k.name.toUpperCase()),lx+12,190,{align:'center'});lx+=26});
