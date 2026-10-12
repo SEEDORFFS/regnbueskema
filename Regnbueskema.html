@@ -364,6 +364,11 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
 .catrow{display:grid;grid-template-columns:44px minmax(0,1fr) 150px 54px auto;gap:8px;align-items:center;margin-bottom:6px}
 .catrow input[type=color]{width:44px;height:32px;border:1px solid var(--line-2);border-radius:8px;padding:2px;background:var(--panel)}
 .modal.wide{max-width:880px}
+.pp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;max-height:46vh;overflow:auto;padding:2px}
+.pp-wk{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;font-size:13px}
+.pp-wk span{grid-column:2;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-wk:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.pp-wk.brk span{font-style:italic}
 .tidy-quick{display:flex;flex-wrap:wrap;gap:6px}
 .tidy-quick .chip{padding:4px 10px;font-size:13px}
 .tidy-tools{display:flex;gap:6px;flex-wrap:wrap}
@@ -469,7 +474,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
           <button data-exp="pack"><span>Gem standardpakke til kolleger (.json)</span><small>Dette forløb + biblioteket som fælles startpunkt</small></button>
           <hr>
           <div class="mh">Del og udskriv</div>
-          <button data-exp="pdf"><span>PDF – hele forløbet</span><small>Ét ugeskema pr. side. Én uge: brug „PDF“ ved ugen</small></button>
+          <button data-exp="pdf"><span>PDF – vælg uger…</span><small>Ét ugeskema pr. side · hele forløbet eller fx uge 33–37</small></button>
           <button data-exp="xlsx"><span>Excel</span><small>Liste over aktiviteter + skemagitter</small></button>
           <hr>
           <button data-exp="reset"><span>Start forfra…</span><small>Nulstil til appens startindhold – med backup først</small></button>
@@ -1584,7 +1589,7 @@ $('zoom-in').onclick=()=>{ui.zoom=Math.min(2,+(ui.zoom+.15).toFixed(2));renderHe
 $('zoom-out').onclick=()=>{ui.zoom=Math.max(.55,+(ui.zoom-.15).toFixed(2));renderHeader();renderSchedule()};
 $('undo').onclick=undo;$('redo').onclick=redo;
 $('btn-export').onclick=()=>{$('export-menu').hidden=!$('export-menu').hidden};
-$('export-menu').addEventListener('click',e=>{const b=e.target.closest('[data-exp]');if(!b)return;$('export-menu').hidden=true;const k=b.dataset.exp;if(k==='import')$('file-in').click();else if(k==='fileconnect')fileConnect();else if(k==='fileopen')fileOpen();else if(k==='json')exportJSON();else if(k==='pack')exportPack();else if(k==='old')openImp();else if(k==='reset')openReset();else if(k==='xlsx')exportXLSX();else exportPDF()});
+$('export-menu').addEventListener('click',e=>{const b=e.target.closest('[data-exp]');if(!b)return;$('export-menu').hidden=true;const k=b.dataset.exp;if(k==='import')$('file-in').click();else if(k==='fileconnect')fileConnect();else if(k==='fileopen')fileOpen();else if(k==='json')exportJSON();else if(k==='pack')exportPack();else if(k==='old')openImp();else if(k==='reset')openReset();else if(k==='xlsx')exportXLSX();else openPdfPick()});
 $('lib-search').addEventListener('input',e=>{ui.q=e.target.value;renderLibrary()});
 $('lib-new').onclick=()=>newLibItem('');
 $('lib-list').addEventListener('click',e=>{if(e.target.id==='lib-new2')newLibItem(ui.q)});
@@ -2360,11 +2365,30 @@ document.addEventListener('click',e=>{if(e.target.id!=='printcv')return;const h=
 document.addEventListener('mousemove',e=>{if(e.target.id!=='printcv')return;e.target.style.cursor=printHitAt(e)?'pointer':'default'});
 addEventListener('resize',()=>{if(ui.print&&ui.view==='week')drawPrint()});
 const pdfTxt=s=>String(s||'').replace(/[„“”]/g,'"').replace(/[^\x09\x0A\x20-\x7E\xA0-\xFF–—‘’•…]/g,'');
+/* PDF: vælg hvilke uger der skal med */
+const pdfPick={sel:new Set()};
+function weekIsBreak(c,m){return [0,1,2,3,4].every(k=>!isTeaching(c,add(m,k)))}
+function openPdfPick(){const c=cur();const W=courseWeeks(c);pdfPick.sel=new Set(W);
+  openModal(`<div class="modal-h"><div><h2>Hent PDF</h2><p>Vælg de uger, der skal med. Hver uge bliver én side.</p></div><button type="button" class="btn ghost icon" data-close aria-label="Luk">✕</button></div><div class="modal-b" id="pp"></div><div class="modal-f"><span class="small muted" id="pp-n"></span><div class="btnrow"><button class="btn" data-close>Annullér</button><button class="btn primary" id="pp-go">Hent PDF</button></div></div>`);renderPdfPick()}
+function renderPdfPick(){const c=cur();const W=courseWeeks(c);const el=$('pp');if(!el)return;
+  const opt=sel=>W.map(m=>`<option value="${m}" ${m===sel?'selected':''}>Uge ${isoWeek(m)} · ${weekRange(m)}${(c.weeks[m]||{}).label?' · '+esc(c.weeks[m].label):''}</option>`).join('');
+  const chosen=W.filter(m=>pdfPick.sel.has(m));
+  el.innerHTML=`<div class="fgrid"><div class="fld"><label for="pp-from">Fra</label><select id="pp-from">${opt(chosen[0]||W[0])}</select></div><div class="fld"><label for="pp-to">Til</label><select id="pp-to">${opt(chosen[chosen.length-1]||W[W.length-1])}</select></div></div>
+  <div class="btnrow" style="margin:8px 0"><button class="btn sm" data-pp="all">Hele forløbet</button><button class="btn sm" data-pp="teach">Kun uger med undervisning</button><button class="btn sm" data-pp="none">Fravælg alle</button></div>
+  <div class="pp-grid">${W.map(m=>`<label class="pp-wk ${weekIsBreak(c,m)?'brk':''}"><input type="checkbox" data-ppw="${m}" ${pdfPick.sel.has(m)?'checked':''}><b>Uge ${isoWeek(m)}</b><span>${esc((c.weeks[m]||{}).label||weekRange(m))}</span></label>`).join('')}</div>`;
+  const n=chosen.length;$('pp-n').textContent=n?`${n} side${n>1?'r':''}`:'Ingen uger valgt';$('pp-go').disabled=!n}
+$('modal').addEventListener('change',e=>{const t=e.target;if(!$('pp'))return;const W=courseWeeks(cur());
+  if(t.id==='pp-from'||t.id==='pp-to'){let a=$('pp-from').value,b=$('pp-to').value;if(a>b){if(t.id==='pp-from')b=a;else a=b}pdfPick.sel=new Set(W.filter(m=>m>=a&&m<=b));renderPdfPick();return}
+  if(t.dataset.ppw){t.checked?pdfPick.sel.add(t.dataset.ppw):pdfPick.sel.delete(t.dataset.ppw);renderPdfPick()}});
+$('modal').addEventListener('click',e=>{const t=e.target;if(!$('pp'))return;const c=cur();const W=courseWeeks(c);const b=t.closest('[data-pp]');
+  if(b){const k=b.dataset.pp;pdfPick.sel=new Set(k==='all'?W:k==='teach'?W.filter(m=>!weekIsBreak(c,m)):[]);renderPdfPick();return}
+  if(t.id==='pp-go'){const ws=W.filter(m=>pdfPick.sel.has(m));if(!ws.length)return;closeModal();exportPDF(ws)}});
 function exportPDF(only){
   if(!window.jspdf){toast('PDF-modulet er ikke indlæst');return}
   const c=cur();const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   (only||courseWeeks(c)).forEach((m,pi)=>{if(pi)doc.addPage();drawWeekPage(doc,c,m,pi)});
-  offer(fileBase()+(only&&only.length===1?'_uge'+isoWeek(only[0]):'')+'.pdf',doc.output('arraybuffer'));
+  const ws=only||[];const contig=ws.length>1&&ws.every((m,i)=>!i||m===add(ws[i-1],7));
+  offer(fileBase()+(ws.length===1?'_uge'+isoWeek(ws[0]):contig&&ws.length<courseWeeks(cur()).length?'_uge'+isoWeek(ws[0])+'-'+isoWeek(ws[ws.length-1]):ws.length&&ws.length<courseWeeks(cur()).length?'_udvalgte-uger':'')+'.pdf',doc.output('arraybuffer'));
 }
 /* tegner én uge som A4-side – bruges både til PDF (jsPDF) og til printvisningen (canvas) */
 function drawWeekPage(doc,c,m,pi){
