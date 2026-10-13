@@ -465,7 +465,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
         <div class="menu" id="export-menu" hidden>
           <div class="mh">Åbn og hent ind</div>
           <button data-exp="fileopen" class="sa-only" hidden><span>Åbn arbejdsfil…</span><small>Fortsæt med en fil, du har gemt før</small></button>
-          <button data-exp="old"><span>Importér gammelt skema…</span><small>Fra PowerPoint (.pptx) eller Word (.docx)</small></button>
+          <button data-exp="old"><span>Importér gammelt skema…</span><small>Fra PowerPoint, Word eller Excel (fx TimeEdit-udtræk)</small></button>
           <button data-exp="import"><span>Importér projektfil eller standardpakke…</span><small>.json – tilføjes som nyt forløb</small></button>
           <hr>
           <div class="mh">Gem</div>
@@ -1646,7 +1646,7 @@ function openWizard(edit){
     <div class="step"><span class="sn">2</span><div><h4>Periode</h4><div class="fgrid"><div class="fld"><label for="w-start">Startdato</label>${dpBtn('id="w-start" data-dprole="start"',base.start)}</div><div class="fld"><label for="w-end">Slutdato</label>${dpBtn('id="w-end" data-dprole="end"',base.end)}</div></div><div class="small muted" id="w-span"></div></div></div>
     <div class="step"><span class="sn">3</span><div><h4>Ferier, fridage og VFU</h4><div id="w-periods"></div><div class="btnrow"><button type="button" class="btn sm" data-addp="ferie">+ Ferie</button><button type="button" class="btn sm" data-addp="vfu">+ VFU-periode</button><button type="button" class="btn sm" data-addp="fri">+ Fridag</button><button type="button" class="btn sm ghost" id="w-holi">Tilføj danske helligdage</button></div></div></div>
     <div class="step"><span class="sn">4</span><div><h4>Moduler og lokaler pr. ugedag</h4><div class="wd-grid">${[0,1,2,3,4].map(k=>`<div class="fld"><label for="w-m${k}">${WD_LONG[k]}</label><input type="number" min="0" max="4" id="w-m${k}" value="${base.dayModules[k]}"><select id="w-r${k}" aria-label="Lokale ${WD_LONG[k]}">${roomOptions(base.roomByWeekday[k]||'','Lokale?')}</select></div>`).join('')}</div><div class="small muted">Moduler á 90 min: 8.00–9.30 · 9.50–11.20 · 11.50–13.20 · 13.40–15.10. Lokalet kan også sættes pr. dag ved at klikke på dagen i skemaet.</div></div></div>
-    ${edit?'':`<div class="step"><span class="sn">5</span><div><h4>Startpunkt</h4><div class="small muted" style="margin-bottom:6px">Har du et gammelt skema i PowerPoint eller Word? <button type="button" class="btn sm" id="w-old">Importér det først</button></div><div class="src-opt"><label><input type="radio" name="w-src" value="empty" checked><span><b>Tomt skema</b><br><span class="small muted">Byg fra bunden med biblioteket.</span></span></label>${others.map(o=>`<label><input type="radio" name="w-src" value="${o.id}"><span><b>Kopiér ${esc(o.name)}</b><br><span class="small muted">Undervisningsuge 1 lægges i undervisningsuge 1 osv. Ferie- og VFU-uger springes over. Blokke der ikke kan få plads, parkeres.</span></span></label>`).join('')}</div></div></div>`}
+    ${edit?'':`<div class="step"><span class="sn">5</span><div><h4>Startpunkt</h4><div class="small muted" style="margin-bottom:6px">Har du et gammelt skema i PowerPoint, Word eller Excel? <button type="button" class="btn sm" id="w-old">Importér det først</button></div><div class="src-opt"><label><input type="radio" name="w-src" value="empty" checked><span><b>Tomt skema</b><br><span class="small muted">Byg fra bunden med biblioteket.</span></span></label>${others.map(o=>`<label><input type="radio" name="w-src" value="${o.id}"><span><b>Kopiér ${esc(o.name)}</b><br><span class="small muted">Undervisningsuge 1 lægges i undervisningsuge 1 osv. Ferie- og VFU-uger springes over. Blokke der ikke kan få plads, parkeres.</span></span></label>`).join('')}</div></div></div>`}
     <div class="err-msg" id="w-err" hidden></div>
   </div>
   <div class="modal-f">${edit?`<button type="button" class="btn danger" id="w-delcourse" data-confirm="Klik igen – forløbet slettes" ${Object.keys(state.courses).length<2?'disabled title="Det sidste forløb kan ikke slettes"':''}>Slet forløb</button>`:'<span></span>'}<div class="btnrow"><button type="button" class="btn" data-close>Annullér</button><button class="btn primary" type="submit">${edit?'Gem indstillinger':'Byg forløbet'}</button></div></div>
@@ -1863,9 +1863,36 @@ async function parseDOCX(zip){
   return pages;
 }
 function nearestCat(hex){if(!hex||hex==='none')return'';const[r,g,b]=hexRGB('#'+hex);let best='',bd=1e9;for(const k of state.categories){const[x,y,z]=hexRGB(k.color);const d=Math.hypot(r-x,g-y,b-z);if(d<bd){bd=d;best=k.id}}return bd<140?best:''}
+/* lektionsliste (fx TimeEdit) → uger med blokke pr. modul; samme fag i træk lægges sammen (ikke hen over frokost) */
+function lessonCat(title){const t=String(title||'').toLowerCase();const hit=state.library.filter(l=>l.name.length>=5&&t.includes(l.name.toLowerCase())).sort((a,b)=>b.name.length-a.name.length)[0];return hit?hit.cat:guessCat(title)}
+function lessonsToPages(L){
+  const by={};for(const l of L){if(wd(l.date)>4)continue;const m=monOf(l.date);((by[m]||(by[m]={}))[l.date]||(by[m][l.date]=[])).push(l)}
+  return Object.keys(by).sort().map(mon=>{const days={},blocks=[];
+    for(const d of Object.keys(by[mon]).sort()){const ls=by[mon][d];const k=wd(d);const tc={};
+      ls.forEach(l=>String(l.teacher||'').split(/\s*,\s*/).filter(Boolean).forEach(t=>tc[t]=(tc[t]||0)+1));
+      days[k]={d:+d.slice(8),m:+d.slice(5,7),teacher:Object.entries(tc).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join(', ')};
+      const slots=[];for(const l of ls){const s=slotOfTime(l.start);const t=[...new Set(String(l.title||'').split(/\s*,\s*/).filter(Boolean))].join(', ');if(s<0||!t)continue;(slots[s]||(slots[s]=[])).push(Object.assign({},l,{title:t}))}
+      let prev=null;for(let s=0;s<4;s++){const g=slots[s];if(!g){prev=null;continue}const cnt={};g.forEach(l=>cnt[l.title]=(cnt[l.title]||0)+1);const title=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
+        const room=[...new Set(g.filter(l=>l.title===title).flatMap(l=>String(l.room||'').split(/\s*,\s*/)).filter(Boolean))].join(', ');
+        const other=[...new Set(g.filter(l=>l.title!==title).map(l=>l.start.replace(':','.')+': '+l.title))];
+        if(prev&&prev.title===title&&prev.room===room&&s!==2&&!other.length&&!prev.mixed){prev.dur++;continue}
+        prev={k,slot:s,dur:1,fill:'fag:'+title,text:title,title,room,mixed:other.length>0,extra:[...other,room?'Lokale: '+room:''].filter(Boolean).join('\n'),y:s};blocks.push(prev)}}
+    return{days,blocks,legend:{},weekNo:isoWeek(mon),label:'',head:'',rowMods:null,firstDate:Object.keys(by[mon]).sort()[0]}})}
 async function readOldFile(f){
   const n=f.name.toLowerCase();imp.err='';imp.res=null;imp.file=f.name;
   if(/\.(ppt|doc)$/.test(n)){imp.err='Det er det gamle Office-format. Åbn filen i PowerPoint/Word og gem den som .pptx eller .docx – så kan den læses.';renderImp();return}
+  if(/\.(xlsx|xlsm|xls|csv)$/.test(n)){imp.busy=true;renderImp();
+    try{let rows;if(n.endsWith('.csv'))rows=parseCSV(await f.text());else{if(!window.XLSX)throw new Error('Excel-modulet er ikke indlæst.');const wb=XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:'array',cellDates:true});rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''})}
+      let L;try{L=rowsToLessons(rows)}catch(e){throw new Error('Excel-filen ligner ikke en lektionsliste. Appen kan læse udtræk fra skemasystemet (fx TimeEdit) med kolonner for dato, starttid og fag. Et skema tegnet som et gitter i Excel kan gemmes som PDF/Word og læses derfra.')}
+      L=L.filter(l=>l.title);if(!L.length)throw new Error('Filen indeholdt ingen lektioner med dato, tidspunkt og fag.');
+      const pages=lessonsToPages(L);if(!pages.length)throw new Error('Fandt ingen lektioner på hverdage inden for modulernes tider.');
+      const hi=rows.findIndex(r=>r.some(x=>/dato|date/i.test(String(x))));const tl=rows.slice(0,Math.max(0,hi)).map(r=>String(r.find(x=>String(x).trim())||'').trim()).find(t=>t&&!/^timeedit$/i.test(t)&&!/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(t));
+      imp.year=+pages[0].firstDate.slice(0,4);imp.name=tl?tl.replace(/\s+\S*\d{5,}\S*$/,'').trim():f.name.replace(/\.(xlsx|xlsm|xls|csv)$/i,'').replace(/[_-]+/g,' ').trim();imp.rowPlan=null;
+      const fills={};for(const p of pages)for(const b of p.blocks){const e=fills[b.fill]||(fills[b.fill]={n:0,texts:[b.title],guess:{}});e.n++}
+      imp.map={};for(const f2 of Object.keys(fills))imp.map[f2]=lessonCat(fills[f2].texts[0])||'guess';
+      imp.res={pages,fills,kind:'lessons'};
+    }catch(e){imp.err=e.message||'Filen kunne ikke læses.'}
+    imp.busy=false;renderImp();return}
   if(!window.JSZip){imp.err='Modulet til at læse Office-filer er ikke indlæst.';renderImp();return}
   imp.busy=true;renderImp();
   try{const zip=await JSZip.loadAsync(await f.arrayBuffer());let pages;
@@ -1923,7 +1950,7 @@ function impCollect(){
     for(const b0 of p.blocks){const b=plan&&b0.r0!==undefined?Object.assign({},b0,(()=>{const st=rowStarts(plan);return{slot:st[b0.r0],dur:Math.max(1,st[b0.r1]+plan[b0.r1]-st[b0.r0])}})()):b0;const d=add(mon,b.k);const first=trivName(b.text.split('\n')[0]);
       if(DAYOFF.test(first)){const prev=out.periods[out.periods.length-1];if(prev&&prev.label===first&&d>prev.to&&d<=add(prev.to,3))prev.to=d;else if(!out.periods.some(x=>d>=x.from&&d<=x.to))out.periods.push({type:/vfu/i.test(first)?'vfu':'ferie',label:first,from:d,to:d});continue}
       let cat=imp.map[b.fill];if(!cat)continue;if(cat==='guess')cat=guessCat(b.text)||'teori';if(!state.categories.some(x=>x.id===cat))continue;
-      out.blocks.push(Object.assign({date:d,slot:b.slot,dur:b.dur,cat,hasText:!!b.text.trim()},nameDesc(b.text,cat)))}
+      out.blocks.push(Object.assign({date:d,slot:b.slot,dur:b.dur,cat,hasText:!!b.text.trim()},(()=>{const nd=nameDesc(b.text,cat);if(b.extra)nd.desc=nd.desc?nd.desc+'\n'+b.extra:b.extra;return nd})()))}
   }
   return out;
 }
@@ -1997,7 +2024,7 @@ function impSteps(){const st=imp.mode==='rough'?['Vælg fil','Hvad vil du hente?
 function renderImp(){
   const el=$('imp');if(!el)return;if(imp.res&&imp.step===1)imp.step=2;$('imp-steps').innerHTML=impSteps();const foot=$('imp-foot');let h='';
   if(imp.step===1){
-    h=`<div class="fld"><label for="imp-file">Vælg PowerPoint (.pptx) eller Word (.docx)</label><input type="file" id="imp-file" accept=".pptx,.docx,.ppt,.doc"><span class="small muted">Appen leder efter ugedage som kolonneoverskrifter (Mandag … Fredag). Én uge pr. dias – eller én tabel pr. uge i Word. Dit nuværende bibliotek og dine skemaer ændres ikke.</span></div>`;
+    h=`<div class="fld"><label for="imp-file">Vælg PowerPoint (.pptx), Word (.docx) eller Excel (.xlsx)</label><input type="file" id="imp-file" accept=".pptx,.docx,.ppt,.doc,.xlsx,.xlsm,.xls,.csv"><span class="small muted">Excel: et udtræk fra skemasystemet (fx TimeEdit) med én lektion pr. linje. PowerPoint/Word: appen leder efter ugedage som kolonneoverskrifter (Mandag … Fredag). Én uge pr. dias – eller én tabel pr. uge i Word. Dit nuværende bibliotek og dine skemaer ændres ikke.</span></div>`;
     if(imp.busy)h+=`<div class="gen-sum">Læser ${esc(imp.file)} …</div>`;if(imp.err)h+=`<div class="err-msg">${esc(imp.err)}</div>`;
     el.innerHTML=h;foot.innerHTML=`<button class="btn" data-close>Luk</button><span></span>`;return}
   if(imp.step===2){
@@ -2012,7 +2039,7 @@ function renderImp(){
     if(imp.mode!=='acts')h+=`<div class="fgrid"><div class="fld"><label for="imp-name">Navn på forløbet</label><input type="text" id="imp-name" value="${esc(imp.name)}"></div><div class="fld"><label for="imp-year">Skemaets første uge ligger i år</label><input type="number" id="imp-year" min="2000" max="2100" value="${imp.year}"></div></div>`;
     if(imp.rowPlan){const n=imp.rowPlan.length;const opts=n===3?[[2,1,1],[1,2,1],[1,1,2],[1,1,1]]:n===2?[[2,2],[3,1],[1,3],[1,1]]:[[4],[1]];const lab=a=>{let s=1;return a.map((v,i)=>{const t=`række ${i+1} = modul ${v>1?s+'–'+(s+v-1):s}`;s+=v;return t}).join(', ')+(a.reduce((x,y)=>x+y,0)<4?' (kun '+a.reduce((x,y)=>x+y,0)+' moduler)':'')};
       h+=`<div class="fld"><label for="imp-rows">Skemaet har ${n} rækker pr. dag og ingen klokkeslæt (${imp.rowPages} uger). Hvordan passer rækkerne til modulerne?</label><select id="imp-rows" data-rowplan>${opts.map(a=>`<option value="${a.join(',')}" ${a.join(',')===imp.rowPlan.join(',')?'selected':''}>${lab(a)}</option>`).join('')}</select><span class="small muted">Forslaget bygger på rækkernes højde. Uger med 4 rækker læses som ét modul pr. række.</span></div>`}
-    h+=`<div><div class="lbl-s" style="margin-bottom:4px">Hvad betyder farverne?</div>${Object.entries(imp.res.fills).sort((a,b)=>b[1].n-a[1].n).map(([f,e])=>`<div class="map-row imp-row"><span><i class="sw" style="background:${f==='none'?'transparent':'#'+f}"></i>${f==='none'?'Uden farve':''} <span class="muted small">${e.texts.map(esc).join(' · ')||'(tomme felter)'}</span></span><span class="muted small">${e.n}×</span><select data-im="${f}" aria-label="Kategori" style="--gc:${imp.map[f]&&imp.map[f]!=='guess'?catOf(imp.map[f]).color:'transparent'}"><option value="">Spring over</option><option value="guess" ${imp.map[f]==='guess'?'selected':''}>Gæt ud fra teksten</option>${state.categories.map(k=>`<option value="${k.id}" ${k.id===imp.map[f]?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>`).join('')}</div>`;
+    h+=`<div><div class="lbl-s" style="margin-bottom:4px">${imp.res.kind==='lessons'?'Hvilken kategori hører fagene til?':'Hvad betyder farverne?'}</div>${Object.entries(imp.res.fills).sort((a,b)=>b[1].n-a[1].n).map(([f,e])=>`<div class="map-row imp-row"><span>${f.startsWith('fag:')?'':`<i class="sw" style="background:${f==='none'?'transparent':'#'+f}"></i>`}${f==='none'?'Uden farve':''} <span class="muted small">${e.texts.map(esc).join(' · ')||'(tomme felter)'}</span></span><span class="muted small">${e.n}×</span><select data-im="${f}" aria-label="Kategori" style="--gc:${imp.map[f]&&imp.map[f]!=='guess'?catOf(imp.map[f]).color:'transparent'}"><option value="">Spring over</option><option value="guess" ${imp.map[f]==='guess'?'selected':''}>Gæt ud fra teksten</option>${state.categories.map(k=>`<option value="${k.id}" ${k.id===imp.map[f]?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>`).join('')}</div>`;
     el.innerHTML=h;foot.innerHTML=`<button class="btn" data-ia="back">← Vælg en anden fil</button><button class="btn primary" data-ia="next">${imp.mode==='rough'?'Opret skema':'Næste: Gennemse aktiviteter →'}</button>`;return}
   el.innerHTML=`<div class="imp-top"><span id="imp-count"></span><input type="search" id="imp-q" placeholder="Søg i forslagene" value="${esc(imp.q)}" aria-label="Søg i forslagene"><button class="btn sm" data-ia="all">Vælg alle viste</button><button class="btn sm" data-ia="none">Fravælg alle viste</button></div><div id="imp-list"></div><p class="small muted">Dit nuværende bibliotek ændres aldrig. Afkrydsede forslag tilføjes som nye aktiviteter. Forudvalgt er dem, der går igen mindst 2 gange og ikke ligner noget, du allerede har.</p>`;
   renderImpList();
@@ -2034,7 +2061,7 @@ function showWelcome(){
   <div class="modal-b"><div class="src-opt">
     <button class="welcome-card" data-wl="example"><b>Se eksemplet</b><span class="small muted">Et færdigt GF2-forløb bygget med biblioteket. Godt at kigge i og kopiere fra. En kort rundvisning viser, hvordan appen virker.</span></button>
     <button class="welcome-card" data-wl="empty"><b>Start med et tomt forløb</b><span class="small muted">Opret dit eget hold med det samme. Eksemplet fjernes, når dit forløb er oprettet.</span></button>
-    <button class="welcome-card" data-wl="old"><b>Start fra et gammelt skema</b><span class="small muted">Har du et skema i PowerPoint eller Word, kan det hentes ind som grovskema.</span></button>
+    <button class="welcome-card" data-wl="old"><b>Start fra et gammelt skema</b><span class="small muted">Har du et skema i PowerPoint, Word eller Excel (fx fra TimeEdit), kan det hentes ind.</span></button>
   </div></div>`);
   $('modal-body').onclick=e=>{const b=e.target.closest('[data-wl]');if(!b)return;const v=b.dataset.wl;closeModal();
     if(v==='example'){let seen=false;try{seen=!!localStorage.getItem(T_KEY)}catch(e){}if(!seen)startTour(0)}
@@ -2105,7 +2132,7 @@ function applyCells(c,cells,mode){
 }
 function patternCells(c){const cells=[];for(const m of teachingWeeks(c)){if(m<gen.from||m>gen.to)continue;for(let k=0;k<5;k++){const d=add(m,k);if(!isTeaching(c,d))continue;const M=modulesOn(c,d);for(let s=0;s<M;s++){const cat=gen.pat[k][s];if(cat&&state.categories.some(x=>x.id===cat))cells.push({date:d,slot:s,cat,name:catOf(cat).name})}}}return cells}
 function slotOfTime(t){const m=String(t||'').match(/(\d{1,2})[:.](\d{2})/);if(!m)return -1;const v=+m[1]*60+ +m[2];return v<9*60+40?0:v<11*60+40?1:v<13*60+30?2:v<15*60+30?3:-1}
-function guessCat(t){t=(t||'').toLowerCase();if(/teori/.test(t))return'teori';if(/praktik|værksted|vaerksted/.test(t))return'praktik';if(/læreplads|virksomhed|studie|vejledning|mester/.test(t))return'studie';if(/prøve|eksamen|evaluering/.test(t))return'prover';if(/matematik|\bmat\b|grundfag/.test(t))return'matematik';if(/vfu/.test(t))return'vfu';return''}
+function guessCat(t){t=(t||'').toLowerCase();if(/prøve|eksamen|evaluering/.test(t))return'prover';if(/matematik|\bmat\b|grundfag/.test(t))return'matematik';if(/teori/.test(t))return'teori';if(/praktik|værksted|vaerksted/.test(t))return'praktik';if(/læreplads|virksomhed|studie|vejledning|mester/.test(t))return'studie';if(/vfu/.test(t))return'vfu';return''}
 function lessonCells(c){const seen=new Set();const cells=[];
   for(const L of gen.lessons){if(!L.date||!inRange(c,L.date)||wd(L.date)>4)continue;const s=slotOfTime(L.start);if(s<0)continue;const k=L.date+'|'+s;if(seen.has(k))continue;const cat=gen.map[L.title];if(!cat)continue;seen.add(k);
     cells.push({date:L.date,slot:s,cat,name:gen.useTitle&&L.title?L.title.slice(0,70):catOf(cat).name,desc:L.room?'Lokale: '+L.room:''})}
@@ -2129,9 +2156,9 @@ function parseCSV(txt){const first=txt.split(/\r?\n/)[0]||'';const d=[';','\t','
 function rowsToLessons(rows){
   let hi=rows.findIndex(r=>r.some(x=>/dato|date/i.test(String(x))));if(hi<0)throw new Error('Fandt ingen kolonne med „Dato“ i filen.');
   const H=rows[hi].map(x=>String(x).toLowerCase());const col=re=>H.findIndex(h=>re.test(h));
-  const cD=col(/dato|date/),cS=col(/start|fra|begin|tidspunkt|^tid/),cT=col(/aktivitet|fag|titel|title|emne|summary|undervisning|beskrivelse|navn/),cR=col(/lokale|location|rum|room|sted/);
+  const cD=col(/dato|date/);let cS=col(/starttid|start\s*tid|start\s*time|tidspunkt|^tid|^fra/);if(cS<0)cS=H.findIndex((h,i)=>i!==cD&&/start|fra|begin/.test(h));const cU=col(/underviser|lærer|teacher/),cT=col(/aktivitet|fag|titel|title|emne|summary|undervisning|beskrivelse|navn/),cR=col(/lokale|location|rum|room|sted/);
   if(cT<0)throw new Error('Fandt ingen kolonne med aktivitet/fag/titel.');
-  return rows.slice(hi+1).map(r=>({date:parseDateCell(r[cD]),start:cS>=0?timeCell(r[cS]):timeCell(r[cD]),title:String(r[cT]||'').trim(),room:cR>=0?String(r[cR]||'').trim():''})).filter(l=>l.date&&l.start);
+  return rows.slice(hi+1).map(r=>({date:parseDateCell(r[cD]),start:cS>=0?timeCell(r[cS]):timeCell(r[cD]),title:String(r[cT]||'').trim(),room:cR>=0?String(r[cR]||'').trim():'',teacher:cU>=0?String(r[cU]||'').trim():''})).filter(l=>l.date&&l.start);
 }
 function readGenFile(f){
   const r=new FileReader();const name=f.name.toLowerCase();gen.err='';
@@ -2487,7 +2514,7 @@ const TOUR=[
   {sel:'#view-seg',t:'Forløb, uge eller dag',b:`<p>Skift mellem hele forløbet, én uge eller én dag. Med <b>−</b> og <b>+</b> zoomer du. <b>Ctrl+Z</b> fortryder alt.</p>`},
   {sel:'#right',open:'right',t:'Overblik og advarsler',b:`<ul><li><b>Overblik</b> viser, hvor meget af forløbet der er bygget, og fordelingen på teori, værksted og kategorier.</li><li><b>Advarsler</b> fanger blokke i ferier, overlap, forkert lokale og manglende forudsætninger.</li><li>Du bestemmer: tilsidesæt en advarsel med en kort begrundelse.</li></ul>`},
   {sel:'#btn-new',t:'Byg dit eget hold',b:`<ul><li>Angiv holdnavn, start og slut. Kalenderne viser ugenumre – klik på et ugenummer for at vælge hele ugen.</li><li>Tilføj ferier, VFU og danske helligdage.</li><li>Har du et gammelt skema i PowerPoint eller Word, så brug <b>Filer → Importér gammelt skema</b>.</li><li>Brug <b>Grovskema…</b> over skemaet til at fylde teori og værksted ud fra et ugemønster eller en fil fra skemasystemet.</li><li>Vælg <b>Kopiér GF2 August 2026</b> for at genbruge forløbet. Ferie- og VFU-uger springes automatisk over.</li></ul>`},
-  {sel:'#btn-export',t:'Filer: åbn, gem og del',b:`<ul><li><b>Åbn og hent ind</b>: gamle skemaer fra PowerPoint/Word, projektfiler og standardpakker.</li><li><b>Gem</b>: projektfil som backup – og den måde du deler et skema med en kollega. <b>Ctrl+S</b> gemmer.</li><li><b>Del og udskriv</b>: PDF til eleverne og It's learning, Excel med liste og skemagitter.</li></ul>`},
+  {sel:'#btn-export',t:'Filer: åbn, gem og del',b:`<ul><li><b>Åbn og hent ind</b>: gamle skemaer fra PowerPoint, Word eller Excel, projektfiler og standardpakker.</li><li><b>Gem</b>: projektfil som backup – og den måde du deler et skema med en kollega. <b>Ctrl+S</b> gemmer.</li><li><b>Del og udskriv</b>: PDF til eleverne og It's learning, Excel med liste og skemagitter.</li></ul>`},
   STANDALONE?{sel:'#save-status',t:'Gem dit arbejde i en fil',b:`<p>Klik her og vælg en fil, fx <b>Regnbueskema.json</b> i din OneDrive-mappe. Derefter gemmes alt automatisk i filen, og næste gang klikker du her for at fortsætte.</p><p>Uden en fil ligger skemaerne kun i denne browser. Virker i Chrome og Edge. Klik på <b>?</b> for at se rundvisningen igen.</p>`}:{sel:'#save-status',t:'Dit skema gemmes automatisk',b:`<p>Står der <b>„Gemt i din konto“</b>, ligger dine skemaer privat hos dig og følger med til andre computere. Står der „Gemt i browseren“, så husk at gemme en projektfil jævnligt.</p><p>Klik på <b>?</b> for at se rundvisningen igen.</p>`}
 ];
 let tourI=null;let tourEls=null;
