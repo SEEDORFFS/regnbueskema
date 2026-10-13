@@ -465,7 +465,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
         <div class="menu" id="export-menu" hidden>
           <div class="mh">Åbn og hent ind</div>
           <button data-exp="fileopen" class="sa-only" hidden><span>Åbn arbejdsfil…</span><small>Fortsæt med en fil, du har gemt før</small></button>
-          <button data-exp="old"><span>Importér gammelt skema…</span><small>Fra PowerPoint, Word eller Excel (fx TimeEdit-udtræk)</small></button>
+          <button data-exp="old"><span>Importér eksisterende skema…</span><small>Fra PowerPoint, Word eller Excel (fx TimeEdit-udtræk)</small></button>
           <button data-exp="import"><span>Importér projektfil eller standardpakke…</span><small>.json – tilføjes som nyt forløb</small></button>
           <hr>
           <div class="mh">Gem</div>
@@ -1646,7 +1646,7 @@ function openWizard(edit){
     <div class="step"><span class="sn">2</span><div><h4>Periode</h4><div class="fgrid"><div class="fld"><label for="w-start">Startdato</label>${dpBtn('id="w-start" data-dprole="start"',base.start)}</div><div class="fld"><label for="w-end">Slutdato</label>${dpBtn('id="w-end" data-dprole="end"',base.end)}</div></div><div class="small muted" id="w-span"></div></div></div>
     <div class="step"><span class="sn">3</span><div><h4>Ferier, fridage og VFU</h4><div id="w-periods"></div><div class="btnrow"><button type="button" class="btn sm" data-addp="ferie">+ Ferie</button><button type="button" class="btn sm" data-addp="vfu">+ VFU-periode</button><button type="button" class="btn sm" data-addp="fri">+ Fridag</button><button type="button" class="btn sm ghost" id="w-holi">Tilføj danske helligdage</button></div></div></div>
     <div class="step"><span class="sn">4</span><div><h4>Moduler og lokaler pr. ugedag</h4><div class="wd-grid">${[0,1,2,3,4].map(k=>`<div class="fld"><label for="w-m${k}">${WD_LONG[k]}</label><input type="number" min="0" max="4" id="w-m${k}" value="${base.dayModules[k]}"><select id="w-r${k}" aria-label="Lokale ${WD_LONG[k]}">${roomOptions(base.roomByWeekday[k]||'','Lokale?')}</select></div>`).join('')}</div><div class="small muted">Moduler á 90 min: 8.00–9.30 · 9.50–11.20 · 11.50–13.20 · 13.40–15.10. Lokalet kan også sættes pr. dag ved at klikke på dagen i skemaet.</div></div></div>
-    ${edit?'':`<div class="step"><span class="sn">5</span><div><h4>Startpunkt</h4><div class="small muted" style="margin-bottom:6px">Har du et gammelt skema i PowerPoint, Word eller Excel? <button type="button" class="btn sm" id="w-old">Importér det først</button></div><div class="src-opt"><label><input type="radio" name="w-src" value="empty" checked><span><b>Tomt skema</b><br><span class="small muted">Byg fra bunden med biblioteket.</span></span></label>${others.map(o=>`<label><input type="radio" name="w-src" value="${o.id}"><span><b>Kopiér ${esc(o.name)}</b><br><span class="small muted">Undervisningsuge 1 lægges i undervisningsuge 1 osv. Ferie- og VFU-uger springes over. Blokke der ikke kan få plads, parkeres.</span></span></label>`).join('')}</div></div></div>`}
+    ${edit?'':`<div class="step"><span class="sn">5</span><div><h4>Startpunkt</h4><div class="small muted" style="margin-bottom:6px">Har du et eksisterende skema i PowerPoint, Word eller Excel? <button type="button" class="btn sm" id="w-old">Importér det først</button></div><div class="src-opt"><label><input type="radio" name="w-src" value="empty" checked><span><b>Tomt skema</b><br><span class="small muted">Byg fra bunden med biblioteket.</span></span></label>${others.map(o=>`<label><input type="radio" name="w-src" value="${o.id}"><span><b>Kopiér ${esc(o.name)}</b><br><span class="small muted">Undervisningsuge 1 lægges i undervisningsuge 1 osv. Ferie- og VFU-uger springes over. Blokke der ikke kan få plads, parkeres.</span></span></label>`).join('')}</div></div></div>`}
     <div class="err-msg" id="w-err" hidden></div>
   </div>
   <div class="modal-f">${edit?`<button type="button" class="btn danger" id="w-delcourse" data-confirm="Klik igen – forløbet slettes" ${Object.keys(state.courses).length<2?'disabled title="Det sidste forløb kan ikke slettes"':''}>Slet forløb</button>`:'<span></span>'}<div class="btnrow"><button type="button" class="btn" data-close>Annullér</button><button class="btn primary" type="submit">${edit?'Gem indstillinger':'Byg forløbet'}</button></div></div>
@@ -1864,7 +1864,7 @@ async function parseDOCX(zip){
 }
 function nearestCat(hex){if(!hex||hex==='none')return'';const[r,g,b]=hexRGB('#'+hex);let best='',bd=1e9;for(const k of state.categories){const[x,y,z]=hexRGB(k.color);const d=Math.hypot(r-x,g-y,b-z);if(d<bd){bd=d;best=k.id}}return bd<140?best:''}
 /* lektionsliste (fx TimeEdit) → uger med blokke pr. modul; samme fag i træk lægges sammen (ikke hen over frokost) */
-function lessonCat(title){const t=String(title||'').toLowerCase();const hit=state.library.filter(l=>l.name.length>=5&&t.includes(l.name.toLowerCase())).sort((a,b)=>b.name.length-a.name.length)[0];return hit?hit.cat:guessCat(title)}
+function lessonCat(title){const t=String(title||'').toLowerCase();if(/læreplads/.test(t))return'studie';const hit=state.library.filter(l=>l.name.length>=5&&t.includes(l.name.toLowerCase())).sort((a,b)=>b.name.length-a.name.length)[0];return hit?hit.cat:guessCat(title)}
 function lessonsToPages(L){
   const by={};for(const l of L){if(wd(l.date)>4)continue;const m=monOf(l.date);((by[m]||(by[m]={}))[l.date]||(by[m][l.date]=[])).push(l)}
   return Object.keys(by).sort().map(mon=>{const days={},blocks=[];
@@ -1872,7 +1872,7 @@ function lessonsToPages(L){
       ls.forEach(l=>String(l.teacher||'').split(/\s*,\s*/).filter(Boolean).forEach(t=>tc[t]=(tc[t]||0)+1));
       days[k]={d:+d.slice(8),m:+d.slice(5,7),teacher:Object.entries(tc).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join(', ')};
       const slots=[];for(const l of ls){const s=slotOfTime(l.start);const t=[...new Set(String(l.title||'').split(/\s*,\s*/).filter(Boolean))].join(', ');if(s<0||!t)continue;(slots[s]||(slots[s]=[])).push(Object.assign({},l,{title:t}))}
-      let prev=null;for(let s=0;s<4;s++){const g=slots[s];if(!g){prev=null;continue}const cnt={};g.forEach(l=>cnt[l.title]=(cnt[l.title]||0)+1);const title=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
+      let prev=null;for(let s=0;s<4;s++){const g=slots[s];if(!g){prev=null;continue}const cnt={};g.forEach(l=>cnt[l.title]=(cnt[l.title]||0)+1);const lp=g.find(l=>/læreplads/i.test(l.title));const title=lp?lp.title:Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
         const room=[...new Set(g.filter(l=>l.title===title).flatMap(l=>String(l.room||'').split(/\s*,\s*/)).filter(Boolean))].join(', ');
         const other=[...new Set(g.filter(l=>l.title!==title).map(l=>l.start.replace(':','.')+': '+l.title))];
         if(prev&&prev.title===title&&prev.room===room&&s!==2&&!other.length&&!prev.mixed){prev.dur++;continue}
@@ -1999,7 +1999,7 @@ function impApply(){
   toast(msg,'Fortryd import',()=>{if(c){delete state.courses[c.id];store.deleted.add(c.id);state.currentId=state.courses[prevId]?prevId:Object.keys(state.courses)[0];ui.weekMon=null;ui.sel=null}state.library=state.library.filter(l=>!addIds.has(l.id));store.metaDirty=true;changed();toast('Importen er fortrudt')});
 }
 function openImp(){imp.res=null;imp.err='';imp.step=1;imp.mode='rough';imp.asPh=false;imp.sugg=null;
-  openModal(`<div class="modal-h"><div><h2>Importér gammelt skema</h2><p id="imp-steps"></p></div><button type="button" class="btn ghost icon" data-close aria-label="Luk">✕</button></div><div class="modal-b" id="imp"></div><div class="modal-f" id="imp-foot"></div>`);
+  openModal(`<div class="modal-h"><div><h2>Importér eksisterende skema</h2><p id="imp-steps"></p></div><button type="button" class="btn ghost icon" data-close aria-label="Luk">✕</button></div><div class="modal-b" id="imp"></div><div class="modal-f" id="imp-foot"></div>`);
   $('modal-body').closest('.modal').classList.add('wide');renderImp();const box=$('modal-body');
   box.onchange=e=>{const t=e.target;
     if(t.id==='imp-file'&&t.files[0]){readOldFile(t.files[0]);return}
@@ -2031,7 +2031,7 @@ function renderImp(){
     const W=impWeeks();const nb=imp.res.pages.reduce((a,p)=>a+p.blocks.length,0);const per=W.filter(w=>weekPeriod(w.p));
     h=`<div class="gen-sum"><b>${esc(imp.file)}</b>: ${W.length} uger (uge ${isoWeek(W[0].mon)} ${D(W[0].mon).getUTCFullYear()} – uge ${isoWeek(W[W.length-1].mon)} ${D(W[W.length-1].mon).getUTCFullYear()}), ${nb} felter.${per.length?` Ferie/VFU: ${per.map(w=>esc(weekPeriod(w.p))+' (uge '+isoWeek(w.mon)+')').join(', ')}.`:''}</div>
     <div class="src-opt imp-modes">
-      <label><input type="radio" name="imp-mode" value="rough" ${imp.mode==='rough'?'checked':''}><span><b>Skema</b> <span class="tag">Anbefalet til gamle skemaer</span><br><span class="small muted">Et nyt forløb med blokkene på de samme pladser, i de samme farver og med al den oprindelige tekst. Biblioteket røres ikke.</span></span></label>
+      <label><input type="radio" name="imp-mode" value="rough" ${imp.mode==='rough'?'checked':''}><span><b>Skema</b> <span class="tag">Anbefalet</span><br><span class="small muted">Et nyt forløb med blokkene på de samme pladser, i de samme farver og med al den oprindelige tekst. Biblioteket røres ikke.</span></span></label>
       <label><input type="radio" name="imp-mode" value="acts" ${imp.mode==='acts'?'checked':''}><span><b>Aktiviteter</b><br><span class="small muted">Gennemse og vælg, hvilke aktiviteter der skal i biblioteket. Der oprettes intet skema.</span></span></label>
       <label><input type="radio" name="imp-mode" value="both" ${imp.mode==='both'?'checked':''}><span><b>Begge dele</b><br><span class="small muted">Skema + de aktiviteter, du godkender. Blokkene kobles til de godkendte aktiviteter.</span></span></label>
     </div>`;
@@ -2061,7 +2061,7 @@ function showWelcome(){
   <div class="modal-b"><div class="src-opt">
     <button class="welcome-card" data-wl="example"><b>Se eksemplet</b><span class="small muted">Et færdigt GF2-forløb bygget med biblioteket. Godt at kigge i og kopiere fra. En kort rundvisning viser, hvordan appen virker.</span></button>
     <button class="welcome-card" data-wl="empty"><b>Start med et tomt forløb</b><span class="small muted">Opret dit eget hold med det samme. Eksemplet fjernes, når dit forløb er oprettet.</span></button>
-    <button class="welcome-card" data-wl="old"><b>Start fra et gammelt skema</b><span class="small muted">Har du et skema i PowerPoint, Word eller Excel (fx fra TimeEdit), kan det hentes ind.</span></button>
+    <button class="welcome-card" data-wl="old"><b>Start fra et eksisterende skema</b><span class="small muted">Har du et skema i PowerPoint, Word eller Excel (fx fra TimeEdit), kan det hentes ind.</span></button>
   </div></div>`);
   $('modal-body').onclick=e=>{const b=e.target.closest('[data-wl]');if(!b)return;const v=b.dataset.wl;closeModal();
     if(v==='example'){let seen=false;try{seen=!!localStorage.getItem(T_KEY)}catch(e){}if(!seen)startTour(0)}
@@ -2132,7 +2132,7 @@ function applyCells(c,cells,mode){
 }
 function patternCells(c){const cells=[];for(const m of teachingWeeks(c)){if(m<gen.from||m>gen.to)continue;for(let k=0;k<5;k++){const d=add(m,k);if(!isTeaching(c,d))continue;const M=modulesOn(c,d);for(let s=0;s<M;s++){const cat=gen.pat[k][s];if(cat&&state.categories.some(x=>x.id===cat))cells.push({date:d,slot:s,cat,name:catOf(cat).name})}}}return cells}
 function slotOfTime(t){const m=String(t||'').match(/(\d{1,2})[:.](\d{2})/);if(!m)return -1;const v=+m[1]*60+ +m[2];return v<9*60+40?0:v<11*60+40?1:v<13*60+30?2:v<15*60+30?3:-1}
-function guessCat(t){t=(t||'').toLowerCase();if(/prøve|eksamen|evaluering/.test(t))return'prover';if(/matematik|\bmat\b|grundfag/.test(t))return'matematik';if(/teori/.test(t))return'teori';if(/praktik|værksted|vaerksted/.test(t))return'praktik';if(/læreplads|virksomhed|studie|vejledning|mester/.test(t))return'studie';if(/vfu/.test(t))return'vfu';return''}
+function guessCat(t){t=(t||'').toLowerCase();if(/læreplads/.test(t))return'studie';if(/prøve|eksamen|evaluering/.test(t))return'prover';if(/matematik|\bmat\b|grundfag/.test(t))return'matematik';if(/teori/.test(t))return'teori';if(/praktik|værksted|vaerksted/.test(t))return'praktik';if(/læreplads|virksomhed|studie|vejledning|mester/.test(t))return'studie';if(/vfu/.test(t))return'vfu';return''}
 function lessonCells(c){const seen=new Set();const cells=[];
   for(const L of gen.lessons){if(!L.date||!inRange(c,L.date)||wd(L.date)>4)continue;const s=slotOfTime(L.start);if(s<0)continue;const k=L.date+'|'+s;if(seen.has(k))continue;const cat=gen.map[L.title];if(!cat)continue;seen.add(k);
     cells.push({date:L.date,slot:s,cat,name:gen.useTitle&&L.title?L.title.slice(0,70):catOf(cat).name,desc:L.room?'Lokale: '+L.room:''})}
@@ -2513,8 +2513,8 @@ const TOUR=[
   {sel:'.wk-tag',t:'Uger og dage',b:`<ul><li>Klik på <b>ugen</b> for at give den et navn (fx Modul 1), en note eller låse den.</li><li>Klik på en <b>dag</b> for at skrive lærer og lokale (teori/værksted).</li></ul>`},
   {sel:'#view-seg',t:'Forløb, uge eller dag',b:`<p>Skift mellem hele forløbet, én uge eller én dag. Med <b>−</b> og <b>+</b> zoomer du. <b>Ctrl+Z</b> fortryder alt.</p>`},
   {sel:'#right',open:'right',t:'Overblik og advarsler',b:`<ul><li><b>Overblik</b> viser, hvor meget af forløbet der er bygget, og fordelingen på teori, værksted og kategorier.</li><li><b>Advarsler</b> fanger blokke i ferier, overlap, forkert lokale og manglende forudsætninger.</li><li>Du bestemmer: tilsidesæt en advarsel med en kort begrundelse.</li></ul>`},
-  {sel:'#btn-new',t:'Byg dit eget hold',b:`<ul><li>Angiv holdnavn, start og slut. Kalenderne viser ugenumre – klik på et ugenummer for at vælge hele ugen.</li><li>Tilføj ferier, VFU og danske helligdage.</li><li>Har du et gammelt skema i PowerPoint eller Word, så brug <b>Filer → Importér gammelt skema</b>.</li><li>Brug <b>Grovskema…</b> over skemaet til at fylde teori og værksted ud fra et ugemønster eller en fil fra skemasystemet.</li><li>Vælg <b>Kopiér GF2 August 2026</b> for at genbruge forløbet. Ferie- og VFU-uger springes automatisk over.</li></ul>`},
-  {sel:'#btn-export',t:'Filer: åbn, gem og del',b:`<ul><li><b>Åbn og hent ind</b>: gamle skemaer fra PowerPoint, Word eller Excel, projektfiler og standardpakker.</li><li><b>Gem</b>: projektfil som backup – og den måde du deler et skema med en kollega. <b>Ctrl+S</b> gemmer.</li><li><b>Del og udskriv</b>: PDF til eleverne og It's learning, Excel med liste og skemagitter.</li></ul>`},
+  {sel:'#btn-new',t:'Byg dit eget hold',b:`<ul><li>Angiv holdnavn, start og slut. Kalenderne viser ugenumre – klik på et ugenummer for at vælge hele ugen.</li><li>Tilføj ferier, VFU og danske helligdage.</li><li>Har du et eksisterende skema i PowerPoint, Word eller Excel, så brug <b>Filer → Importér eksisterende skema</b>.</li><li>Brug <b>Grovskema…</b> over skemaet til at fylde teori og værksted ud fra et ugemønster eller en fil fra skemasystemet.</li><li>Vælg <b>Kopiér GF2 August 2026</b> for at genbruge forløbet. Ferie- og VFU-uger springes automatisk over.</li></ul>`},
+  {sel:'#btn-export',t:'Filer: åbn, gem og del',b:`<ul><li><b>Åbn og hent ind</b>: eksisterende skemaer fra PowerPoint, Word eller Excel, projektfiler og standardpakker.</li><li><b>Gem</b>: projektfil som backup – og den måde du deler et skema med en kollega. <b>Ctrl+S</b> gemmer.</li><li><b>Del og udskriv</b>: PDF til eleverne og It's learning, Excel med liste og skemagitter.</li></ul>`},
   STANDALONE?{sel:'#save-status',t:'Gem dit arbejde i en fil',b:`<p>Klik her og vælg en fil, fx <b>Regnbueskema.json</b> i din OneDrive-mappe. Derefter gemmes alt automatisk i filen, og næste gang klikker du her for at fortsætte.</p><p>Uden en fil ligger skemaerne kun i denne browser. Virker i Chrome og Edge. Klik på <b>?</b> for at se rundvisningen igen.</p>`}:{sel:'#save-status',t:'Dit skema gemmes automatisk',b:`<p>Står der <b>„Gemt i din konto“</b>, ligger dine skemaer privat hos dig og følger med til andre computere. Står der „Gemt i browseren“, så husk at gemme en projektfil jævnligt.</p><p>Klik på <b>?</b> for at se rundvisningen igen.</p>`}
 ];
 let tourI=null;let tourEls=null;
