@@ -148,6 +148,11 @@ textarea{resize:vertical;min-height:64px;width:100%}
 
 .sched{--tagw:132px;padding:10px 12px 24px;min-width:calc(var(--tagw) + 5 * 118px + 24px)}
 .sched.v-day{min-width:0}
+.qbox{display:inline-flex;align-items:center;gap:4px}
+.qbox input{width:170px;padding:5px 9px;font-size:13px}
+.qbox .btn.icon.sm{min-width:26px;padding:2px 6px}
+.sched.searching .it:not(.hit){opacity:.16;filter:saturate(.4)}
+.sched.searching .it.hit{box-shadow:0 0 0 2.5px var(--fg),0 4px 12px rgba(0,0,0,.25);z-index:3}
 .sched.v-print{min-width:0;padding:12px 16px 28px}
 .printwrap{max-width:1180px;margin:0 auto;display:grid;gap:8px}
 .printnote{font-size:12.5px;color:var(--muted)}
@@ -1179,13 +1184,13 @@ function renderNav(){
   const c=cur();const n=$('nav');const weeks=courseWeeks(c);
   if(ui.view==='overview'){
     const st=`${longDate(c.start)} – ${longDate(c.end)}`;
-    n.innerHTML=`<span class="title">${esc(c.name)}</span>${c.example?'<span class="tag" title="Eksempelforløb – kan slettes under forløbsindstillinger">Eksempel</span>':''}<span class="sub">${st} · ${weeks.length} uger</span><span style="flex:1"></span><button class="btn sm" data-gen>Grovskema…</button>`;return}
+    n.innerHTML=`<span class="title">${esc(c.name)}</span>${c.example?'<span class="tag" title="Eksempelforløb – kan slettes under forløbsindstillinger">Eksempel</span>':''}<span class="sub">${st} · ${weeks.length} uger</span><span style="flex:1"></span>${qBox()}<button class="btn sm" data-gen>Grovskema…</button>`;updateQn();return}
   if(ui.view==='week'){
     const m=ui.weekMon;const w=c.weeks[m]||{};const i=weeks.indexOf(m);
     n.innerHTML=`<button class="btn sm" data-view="overview">← Hele forløbet</button><button class="btn icon" data-nav="-1" aria-label="Forrige uge" ${i<=0?'disabled':''}>◀</button>
       <select id="week-pick" aria-label="Vælg uge">${weeks.map(x=>`<option value="${x}" ${x===m?'selected':''}>Uge ${isoWeek(x)} · ${weekRange(x)}${(c.weeks[x]||{}).label?' · '+esc(c.weeks[x].label):''}</option>`).join('')}</select>
       <button class="btn icon" data-nav="1" aria-label="Næste uge" ${i>=weeks.length-1?'disabled':''}>▶</button>
-      <span class="title">${esc(w.label||'Uge '+isoWeek(m))}</span><span class="sub">uge ${isoWeek(m)} · ${weekRange(m)} ${D(m).getUTCFullYear()}</span><span style="flex:1"></span><button class="btn sm" data-weekpdf="${m}">Hent uge som PDF</button><button class="btn sm" data-weekcopy="${m}">Kopiér som tekst</button>`;return}
+      <span class="title">${esc(w.label||'Uge '+isoWeek(m))}</span><span class="sub">uge ${isoWeek(m)} · ${weekRange(m)} ${D(m).getUTCFullYear()}</span><span style="flex:1"></span>${qBox()}<button class="btn sm" data-weekpdf="${m}">Hent uge som PDF</button><button class="btn sm" data-weekcopy="${m}">Kopiér som tekst</button>`;updateQn();return}
   const d=ui.focusDate;
   n.innerHTML=`<button class="btn sm" data-view="overview">← Hele forløbet</button><button class="btn icon" data-nav="-1" aria-label="Forrige dag">◀</button><button class="btn icon" data-nav="1" aria-label="Næste dag">▶</button>
     <span class="title">${WD_LONG[wd(d)]} ${longDate(d)}</span><span class="sub">uge ${isoWeek(d)}${(c.weeks[monOf(d)]||{}).label?' · '+esc(c.weeks[monOf(d)].label):''}</span>
@@ -1199,6 +1204,15 @@ function ensureFocus(){
   if(!ui.focusDate||!inRange(c,ui.focusDate)||wd(ui.focusDate)>4){ui.focusDate=ui.weekMon;if(ui.focusDate<c.start)ui.focusDate=c.start;while(wd(ui.focusDate)>4)ui.focusDate=add(ui.focusDate,1)}
 }
 
+/* søg i skemaet */
+const qNorm=t=>String(t||'').toLowerCase();
+function itemHit(c,i){const q=qNorm(ui.sq).trim();if(!q)return false;return qNorm(i.name+' '+i.desc+' '+catOf(i.cat).name+' '+((c.days[i.date]||{}).teacher||'')).includes(q)}
+function qHits(){const c=cur();return c.items.filter(i=>i.date&&itemHit(c,i)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot)}
+function qBox(){return`<span class="qbox"><input type="search" id="sched-q" placeholder="Søg i skemaet" value="${esc(ui.sq||'')}" aria-label="Søg i skemaet"><span id="sched-qn" class="small muted"></span><button class="btn icon sm" data-qnav="-1" aria-label="Forrige fund">‹</button><button class="btn icon sm" data-qnav="1" aria-label="Næste fund">›</button></span>`}
+function updateQn(){const el=$('sched-qn');if(!el)return;const q=(ui.sq||'').trim();const n=q?qHits().length:0;el.textContent=q?(n?`${ui.sqi>=0?ui.sqi+1+' af ':''}${n} fund`:'Ingen fund'):'';document.querySelectorAll('[data-qnav]').forEach(b=>b.hidden=!n)}
+document.addEventListener('input',e=>{if(e.target.id!=='sched-q')return;ui.sq=e.target.value;ui.sqi=-1;renderSchedule();updateQn()});
+document.addEventListener('keydown',e=>{if(e.target.id!=='sched-q')return;if(e.key==='Enter'){e.preventDefault();qGo(e.shiftKey?-1:1)}if(e.key==='Escape'&&ui.sq){e.stopPropagation();ui.sq='';e.target.value='';renderSchedule();updateQn()}},true);
+function qGo(d){const H=qHits();if(!H.length)return;ui.sqi=((ui.sqi<0?(d>0?-1:0):ui.sqi)+d+H.length)%H.length;const id=H[ui.sqi].id;goToItem(id);updateQn()}
 function renderSchedule(){
   const c=cur();ensureFocus();renderNav();
   const H=rowH();const M=maxMods(c);const sc=$('sched');
@@ -1226,7 +1240,7 @@ function renderSchedule(){
       const compact=ui.view==='week'&&i.dur<2;
       const nImg=(i.images||[]).length;const thumbs=ui.view!=='overview'&&nImg&&!compact;
       const showDesc=i.desc&&ht>=40&&!compact;
-      h+=`<div class="it ${thumbs?'hasth':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
+      h+=`<div class="it ${thumbs?'hasth':''} ${(ui.sq||'').trim()&&itemHit(c,i)?'hit':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
         +`<span class="n">${esc(i.name)}</span>${ui.view!=='overview'&&goodLinks(i).length&&ht>=56?`<span class="ilinks">${goodLinks(i).map(l=>`<a href="${esc(safeHref(l.url))}" target="_blank" rel="noopener" title="${esc(safeHref(l.url))}">${ICON.link}${esc(linkLabel(l))}</a>`).join('')}</span>`:''}${showDesc?`<span class="ds">${esc(i.desc)}</span>`:''}${thumbs?blockThumbs(i):''}`
         +`<span class="bd">${warnItems.has(i.id)?`<span class="w" title="Se advarsler">${ICON.warn}</span>`:''}${goodLinks(i).length?`<span class="lk2" title="${goodLinks(i).length} link${goodLinks(i).length>1?'s':''}">${ICON.link}</span>`:''}${nImg?`<span class="im2" title="${nImg} billede${nImg>1?'r':''}">${ICON.img}</span>`:''}${i.locked?ICON.lock:''}</span><span class="rs-h" aria-hidden="true"></span></div>`;
     }
@@ -1251,7 +1265,7 @@ function renderSchedule(){
     const d=ui.focusDate;html+=`<section class="wk" data-mon="${monOf(d)}" style="--cols:1;--tagw:72px">${timeCol()}${dayCol(d)}</section>`;
     sc.className='sched v-day';sc.style.cssText=`--hh:${hh}px;--tagw:72px`;
   }
-  sc.innerHTML=html;ui.popId=null;fitBlocks(sc);
+  sc.innerHTML=html;ui.popId=null;sc.classList.toggle('searching',!!(ui.sq||'').trim());fitBlocks(sc);
   document.body.classList.toggle('armed-mode',!!ui.armed);
 }
 
@@ -1488,6 +1502,7 @@ document.addEventListener('click',e=>{
   if(b=t.closest('[data-addlink]')){const o=linkTarget(b.dataset.addlink);if(!o)return;mutate(()=>{o.links=(o.links||[]).concat([{label:'',url:''}])});setTimeout(()=>{const r=[...document.querySelectorAll('#right-body .lrow')].pop();if(r)r.querySelector('[data-lk=url]').focus()},0);return}
   if(b=t.closest('[data-rmlink]')){const o=linkTarget(b.dataset.who);if(!o||!o.links)return;const k=+b.dataset.rmlink;mutate(()=>{o.links.splice(k,1)});return}
   if(t.closest('.ilinks a')){return}
+  if(b=t.closest('[data-qnav]')){qGo(+b.dataset.qnav);return}
   if(b=t.closest('[data-imgview]')){e.stopPropagation();showImage(b.dataset.imgview,b.dataset.cap||'');return}
   if(b=t.closest('[data-addimg]')){imgWho=b.dataset.addimg;$('img-in').click();return}
   if(b=t.closest('[data-rmimg]')){const o=linkTarget(b.dataset.who);if(!o||!o.images)return;const k=+b.dataset.rmimg;mutate(()=>{o.images.splice(k,1)});toast('Billedet er fjernet','Fortryd',undo);return}
@@ -1889,7 +1904,7 @@ async function readOldFile(f){
       const hi=rows.findIndex(r=>r.some(x=>/dato|date/i.test(String(x))));const tl=rows.slice(0,Math.max(0,hi)).map(r=>String(r.find(x=>String(x).trim())||'').trim()).find(t=>t&&!/^timeedit$/i.test(t)&&!/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(t));
       imp.year=+pages[0].firstDate.slice(0,4);imp.name=tl?tl.replace(/\s+\S*\d{5,}\S*$/,'').trim():f.name.replace(/\.(xlsx|xlsm|xls|csv)$/i,'').replace(/[_-]+/g,' ').trim();imp.rowPlan=null;
       const fills={};for(const p of pages)for(const b of p.blocks){const e=fills[b.fill]||(fills[b.fill]={n:0,texts:[b.title],guess:{}});e.n++}
-      imp.map={};for(const f2 of Object.keys(fills))imp.map[f2]=lessonCat(fills[f2].texts[0])||'guess';
+      imp.map={};for(const f2 of Object.keys(fills))imp.map[f2]=lessonCat(fills[f2].texts[0])||'room';
       imp.res={pages,fills,kind:'lessons'};
     }catch(e){imp.err=e.message||'Filen kunne ikke læses.'}
     imp.busy=false;renderImp();return}
@@ -1940,7 +1955,12 @@ function nameDesc(text,cat){
   name=name.replace(/:$/,'').trim();
   return{name,desc:raw.filter((_,j)=>!used.includes(j)).join('\n'),room};
 }
-function impCollect(){
+/* „Følg lokalet“: et lokale tæller som teori/værksted ud fra de fag, der er sat til Teori/Praktik i samme fil */
+let _roomCat=null;
+function roomCatOf(room){if(!_roomCat){const cnt={};for(const p of imp.res.pages)for(const b of p.blocks){const c=imp.map[b.fill];if(!c||c==='room'||c==='guess'||!b.room)continue;const k=catOf(c).room;if(k!=='teori'&&k!=='vaerksted')continue;for(const r of b.room.split(/\s*,\s*/)){(cnt[r]||(cnt[r]={}))[c]=(cnt[r][c]||0)+1}}
+    _roomCat={};for(const[r,o]of Object.entries(cnt))_roomCat[r]=Object.entries(o).sort((a,b)=>b[1]-a[1])[0][0]}
+  for(const r of String(room||'').split(/\s*,\s*/))if(_roomCat[r])return _roomCat[r];return''}
+function impCollect(){_roomCat=null;
   const W=impWeeks();const out={blocks:[],periods:[],weeks:{},days:{},W};
   for(const{mon,p}of W){
     const pl=weekPeriod(p);if(pl){out.periods.push({type:/vfu/i.test(pl)?'vfu':'ferie',label:pl,from:mon,to:add(mon,4)});out.weeks[mon]={label:pl};continue}
@@ -1949,7 +1969,7 @@ function impCollect(){
     const plan=p.rowMods&&imp.rowPlan&&imp.rowPlan.length===p.rowMods.length?imp.rowPlan:null;
     for(const b0 of p.blocks){const b=plan&&b0.r0!==undefined?Object.assign({},b0,(()=>{const st=rowStarts(plan);return{slot:st[b0.r0],dur:Math.max(1,st[b0.r1]+plan[b0.r1]-st[b0.r0])}})()):b0;const d=add(mon,b.k);const first=trivName(b.text.split('\n')[0]);
       if(DAYOFF.test(first)){const prev=out.periods[out.periods.length-1];if(prev&&prev.label===first&&d>prev.to&&d<=add(prev.to,3))prev.to=d;else if(!out.periods.some(x=>d>=x.from&&d<=x.to))out.periods.push({type:/vfu/i.test(first)?'vfu':'ferie',label:first,from:d,to:d});continue}
-      let cat=imp.map[b.fill];if(!cat)continue;if(cat==='guess')cat=guessCat(b.text)||'teori';if(!state.categories.some(x=>x.id===cat))continue;
+      let cat=imp.map[b.fill];if(!cat)continue;if(cat==='room')cat=roomCatOf(b.room)||guessCat(b.text)||'teori';if(cat==='guess')cat=guessCat(b.text)||'teori';if(!state.categories.some(x=>x.id===cat))continue;
       out.blocks.push(Object.assign({date:d,slot:b.slot,dur:b.dur,cat,hasText:!!b.text.trim()},(()=>{const nd=nameDesc(b.text,cat);if(b.extra)nd.desc=nd.desc?nd.desc+'\n'+b.extra:b.extra;return nd})()))}
   }
   return out;
@@ -2039,7 +2059,7 @@ function renderImp(){
     if(imp.mode!=='acts')h+=`<div class="fgrid"><div class="fld"><label for="imp-name">Navn på forløbet</label><input type="text" id="imp-name" value="${esc(imp.name)}"></div><div class="fld"><label for="imp-year">Skemaets første uge ligger i år</label><input type="number" id="imp-year" min="2000" max="2100" value="${imp.year}"></div></div>`;
     if(imp.rowPlan){const n=imp.rowPlan.length;const opts=n===3?[[2,1,1],[1,2,1],[1,1,2],[1,1,1]]:n===2?[[2,2],[3,1],[1,3],[1,1]]:[[4],[1]];const lab=a=>{let s=1;return a.map((v,i)=>{const t=`række ${i+1} = modul ${v>1?s+'–'+(s+v-1):s}`;s+=v;return t}).join(', ')+(a.reduce((x,y)=>x+y,0)<4?' (kun '+a.reduce((x,y)=>x+y,0)+' moduler)':'')};
       h+=`<div class="fld"><label for="imp-rows">Skemaet har ${n} rækker pr. dag og ingen klokkeslæt (${imp.rowPages} uger). Hvordan passer rækkerne til modulerne?</label><select id="imp-rows" data-rowplan>${opts.map(a=>`<option value="${a.join(',')}" ${a.join(',')===imp.rowPlan.join(',')?'selected':''}>${lab(a)}</option>`).join('')}</select><span class="small muted">Forslaget bygger på rækkernes højde. Uger med 4 rækker læses som ét modul pr. række.</span></div>`}
-    h+=`<div><div class="lbl-s" style="margin-bottom:4px">${imp.res.kind==='lessons'?'Hvilken kategori hører fagene til?':'Hvad betyder farverne?'}</div>${Object.entries(imp.res.fills).sort((a,b)=>b[1].n-a[1].n).map(([f,e])=>`<div class="map-row imp-row"><span>${f.startsWith('fag:')?'':`<i class="sw" style="background:${f==='none'?'transparent':'#'+f}"></i>`}${f==='none'?'Uden farve':''} <span class="muted small">${e.texts.map(esc).join(' · ')||'(tomme felter)'}</span></span><span class="muted small">${e.n}×</span><select data-im="${f}" aria-label="Kategori" style="--gc:${imp.map[f]&&imp.map[f]!=='guess'?catOf(imp.map[f]).color:'transparent'}"><option value="">Spring over</option><option value="guess" ${imp.map[f]==='guess'?'selected':''}>Gæt ud fra teksten</option>${state.categories.map(k=>`<option value="${k.id}" ${k.id===imp.map[f]?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>`).join('')}</div>`;
+    h+=`<div><div class="lbl-s" style="margin-bottom:4px">${imp.res.kind==='lessons'?'Hvilken kategori hører fagene til?':'Hvad betyder farverne?'}</div>${Object.entries(imp.res.fills).sort((a,b)=>b[1].n-a[1].n).map(([f,e])=>`<div class="map-row imp-row"><span>${f.startsWith('fag:')?'':`<i class="sw" style="background:${f==='none'?'transparent':'#'+f}"></i>`}${f==='none'?'Uden farve':''} <span class="muted small">${e.texts.map(esc).join(' · ')||'(tomme felter)'}</span></span><span class="muted small">${e.n}×</span><select data-im="${f}" aria-label="Kategori" style="--gc:${imp.map[f]&&imp.map[f]!=='guess'?catOf(imp.map[f]).color:'transparent'}"><option value="">Spring over</option>${imp.res.kind==='lessons'?`<option value="room" ${imp.map[f]==='room'?'selected':''}>Følg lokalet (teori/værksted)</option>`:''}<option value="guess" ${imp.map[f]==='guess'?'selected':''}>Gæt ud fra teksten</option>${state.categories.map(k=>`<option value="${k.id}" ${k.id===imp.map[f]?'selected':''}>${esc(k.name)}</option>`).join('')}</select></div>`).join('')}</div>`;
     el.innerHTML=h;foot.innerHTML=`<button class="btn" data-ia="back">← Vælg en anden fil</button><button class="btn primary" data-ia="next">${imp.mode==='rough'?'Opret skema':'Næste: Gennemse aktiviteter →'}</button>`;return}
   el.innerHTML=`<div class="imp-top"><span id="imp-count"></span><input type="search" id="imp-q" placeholder="Søg i forslagene" value="${esc(imp.q)}" aria-label="Søg i forslagene"><button class="btn sm" data-ia="all">Vælg alle viste</button><button class="btn sm" data-ia="none">Fravælg alle viste</button></div><div id="imp-list"></div><p class="small muted">Dit nuværende bibliotek ændres aldrig. Afkrydsede forslag tilføjes som nye aktiviteter. Forudvalgt er dem, der går igen mindst 2 gange og ikke ligner noget, du allerede har.</p>`;
   renderImpList();
