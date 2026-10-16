@@ -1181,7 +1181,9 @@ function renderLibrary(){
   $('park').innerHTML=`<div class="park-h"><span>Parkering</span><span>${pk.length}</span></div><div class="park-list">${pk.length?pk.map(i=>{const k=catOf(i.cat);return`<span class="pk" data-drag="item" data-id="${i.id}" style="--c:${k.color};--t:${textOn(k.color)}" title="${esc(i.name)}">${esc(i.name)}</span>`}).join(''):'<span class="park-empty">Træk en blok hertil for at parkere den uden for skemaet.</span>'}</div>`;
 }
 
-function renderNav(){
+function renderNav(){const ae=document.activeElement;const keep=ae&&ae.id==='sched-q'?[ae.selectionStart,ae.selectionEnd]:null;_renderNav();
+  if(keep){const q=$('sched-q');if(q){q.focus();try{q.setSelectionRange(keep[0],keep[1])}catch(e){}}}}
+function _renderNav(){
   const c=cur();const n=$('nav');const weeks=courseWeeks(c);
   if(ui.view==='overview'){
     const st=`${longDate(c.start)} – ${longDate(c.end)}`;
