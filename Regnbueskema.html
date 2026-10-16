@@ -1213,7 +1213,12 @@ function itemHit(c,i){const q=qNorm(ui.sq).trim();if(!q)return false;return qNor
 function qHits(){const c=cur();return c.items.filter(i=>i.date&&itemHit(c,i)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot)}
 function qBox(){return`<span class="qbox"><input type="search" id="sched-q" placeholder="Søg i skemaet" value="${esc(ui.sq||'')}" aria-label="Søg i skemaet"><span id="sched-qn" class="small muted"></span><button class="btn icon sm" data-qnav="-1" aria-label="Forrige fund">‹</button><button class="btn icon sm" data-qnav="1" aria-label="Næste fund">›</button></span>`}
 function updateQn(){const el=$('sched-qn');if(!el)return;const q=(ui.sq||'').trim();const n=q?qHits().length:0;el.textContent=q?(n?`${ui.sqi>=0?ui.sqi+1+' af ':''}${n} fund`:'Ingen fund'):'';document.querySelectorAll('[data-qnav]').forEach(b=>b.hidden=!n)}
-document.addEventListener('input',e=>{if(e.target.id!=='sched-q')return;ui.sq=e.target.value;ui.sqi=-1;renderSchedule();updateQn()});
+let qScrollT=null;
+function qShowFirst(){const H=qHits();if(!H.length)return;const i=H[0];ui.sqi=0;
+  if(ui.view==='week'&&monOf(i.date)!==ui.weekMon){ui.weekMon=monOf(i.date);renderSchedule()}
+  else if(ui.view==='day'&&i.date!==ui.focusDate){ui.focusDate=i.date;ui.weekMon=monOf(i.date);renderSchedule()}
+  updateQn();const el=document.querySelector(`.it[data-id="${i.id}"]`);if(el)el.scrollIntoView({block:'center',behavior:'smooth'})}
+document.addEventListener('input',e=>{if(e.target.id!=='sched-q')return;ui.sq=e.target.value;ui.sqi=-1;renderSchedule();updateQn();clearTimeout(qScrollT);if(ui.sq.trim())qScrollT=setTimeout(qShowFirst,250)});
 document.addEventListener('keydown',e=>{if(e.target.id!=='sched-q')return;if(e.key==='Enter'){e.preventDefault();qGo(e.shiftKey?-1:1)}if(e.key==='Escape'&&ui.sq){e.stopPropagation();ui.sq='';e.target.value='';renderSchedule();updateQn()}},true);
 function qGo(d){const H=qHits();if(!H.length)return;ui.sqi=((ui.sqi<0?(d>0?-1:0):ui.sqi)+d+H.length)%H.length;const id=H[ui.sqi].id;goToItem(id);updateQn()}
 function renderSchedule(){
