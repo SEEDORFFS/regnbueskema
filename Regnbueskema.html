@@ -1148,7 +1148,8 @@ function computeStats(c){
 function rowH(){return Math.round(({overview:24,week:74,day:92})[ui.view]*ui.zoom)}
 function changed(full){scheduleSave();renderAll()}
 function dropFri(st){if(!st||!st.categories||!st.categories.some(k=>k.id==='fri'))return false;st.categories=st.categories.filter(k=>k.id!=='fri');const to=st.categories.some(k=>k.id==='studie')?'studie':(st.categories[0]||{}).id;const fix=o=>{if(o.cat==='fri')o.cat=to};(st.library||[]).forEach(fix);Object.values(st.courses||{}).forEach(c=>(c.items||[]).forEach(fix));return true}
-function renderAll(){if(dropFri(state))scheduleSave();renderMark();renderHeader();renderLibrary();renderSchedule();renderRight()}
+function markTe(st){let ch=false;for(const c of Object.values(st.courses||{})){if(c.teMig||!/^Importeret fra .*\.(xlsx|xlsm|xls|csv)$/i.test(c.note||''))continue;c.teMig=true;ch=true;for(const i of c.items)if(!i.ph&&!i.libId&&/^Lokale:/m.test(i.desc||''))i.te=true}return ch}
+function renderAll(){if(dropFri(state)|markTe(state))scheduleSave();renderMark();renderHeader();renderLibrary();renderSchedule();renderRight()}
 
 function renderMark(){const m=$('mark');if(!m.firstChild)m.innerHTML='<svg viewBox="40 130 432 250" width="36" height="21" aria-hidden="true"><path d="M56 360A200 200 0 0 1 456 360" stroke="#E5484D" stroke-width="30" stroke-linecap="round" fill="none"/><path d="M92 360A164 164 0 0 1 420 360" stroke="#F5A524" stroke-width="30" stroke-linecap="round" fill="none"/><path d="M128 360A128 128 0 0 1 384 360" stroke="#F5D42C" stroke-width="30" stroke-linecap="round" fill="none"/><path d="M164 360A92 92 0 0 1 348 360" stroke="#8CCB4E" stroke-width="30" stroke-linecap="round" fill="none"/><path d="M200 360A56 56 0 0 1 312 360" stroke="#22A8E6" stroke-width="30" stroke-linecap="round" fill="none"/></svg>'}
 function renderHeader(){
@@ -1591,7 +1592,7 @@ function applyField(el,isChange){
     if(el.dataset.lk==='url'&&isChange){o.links[k].url=normUrl(v);scheduleSave();renderSchedule();renderRight();return}
     if(isChange)return;o.links[k][el.dataset.lk]=v;scheduleSave();renderSchedule();return}
   if(el.dataset.f){const i=c.items.find(x=>x.id===ui.sel.id);if(!i)return;const f=el.dataset.f;
-    if(f==='name'||f==='desc'){if(isChange)return;i[f]=v}
+    if(f==='name'||f==='desc'){if(isChange)return;i[f]=v;if(i.te)i.te=false}
     else if(f==='cat'){i.cat=v;scheduleSave();renderAll();return}
     else if(f==='room'){i.room=v}
     else if(f==='locked'){pushUndo();i.locked=v;scheduleSave();renderAll();return}
@@ -1989,7 +1990,7 @@ function impCourse(col,link){
   const W=col.W;const c=newCourse({name:imp.name||'Importeret skema',start:W[0].mon,end:add(W[W.length-1].mon,4),note:'Importeret fra '+imp.file});
   c.periods=col.periods.map(p=>Object.assign({id:uid()},p));c.weeks=clone(col.weeks);c.days=clone(col.days);
   const per={};
-  for(const b of col.blocks){c.items.push({id:uid(),date:b.date,slot:b.slot,dur:b.dur,short:b.short||0,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:!!imp.asPh});per[b.date]=Math.max(per[b.date]||0,b.slot+b.dur)}
+  const te=imp.res&&imp.res.kind==='lessons'&&!imp.asPh;for(const b of col.blocks){c.items.push({id:uid(),te,date:b.date,slot:b.slot,dur:b.dur,short:b.short||0,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:!!imp.asPh});per[b.date]=Math.max(per[b.date]||0,b.slot+b.dur)}
   const ends=[[],[],[],[],[]];for(const d in per)ends[wd(d)].push(per[d]);
   c.dayModules=c.dayModules.map((def,k)=>{const a=ends[k];if(!a.length)return def;const cnt={};a.forEach(v=>cnt[v]=(cnt[v]||0)+1);return +Object.entries(cnt).sort((x,y)=>y[1]-x[1]||y[0]-x[0])[0][0]});
   return c;
@@ -2139,11 +2140,11 @@ function copyWeek(m){
 
 /* ---------- grovskema ---------- */
 function splitPh(c,i,s,e){const a=i.slot,b=i.slot+i.dur;if(e<=a||s>=b)return;c.items=c.items.filter(x=>x!==i);if(s>a)c.items.push(Object.assign(clone(i),{id:uid(),dur:s-a}));if(e<b)c.items.push(Object.assign(clone(i),{id:uid(),slot:e,dur:b-e}))}
-function consumePh(c,date,slot,dur,exceptId){const got={lines:[],short:0};for(const x of c.items.slice())if(x.ph&&x.id!==exceptId&&x.date===date&&x.slot<slot+dur&&slot<x.slot+x.dur){
-    for(const l of String(x.desc||'').split('\n'))if(/^\s*(lokale:|\d{1,2}[.:]\d{2}:)/i.test(l)&&!got.lines.includes(l.trim()))got.lines.push(l.trim());
+function consumePh(c,date,slot,dur,exceptId,eatTe){const got={lines:[],short:0};for(const x of c.items.slice())if((x.ph||(eatTe&&x.te))&&x.id!==exceptId&&x.date===date&&x.slot<slot+dur&&slot<x.slot+x.dur){
+    for(const l of String(x.desc||'').split('\n'))if(/^\s*lokale:/i.test(l)&&!got.lines.includes(l.trim()))got.lines.push(l.trim());
     if(x.short&&x.slot+x.dur===slot+dur)got.short=x.short;splitPh(c,x,slot,slot+dur)}return got}
 /* når en aktivitet erstatter en pladsholder, overtager den lokale (og andre fag i modulet) samt et afkortet sidste modul */
-function absorbPh(c,it,exceptId){const g=consumePh(c,it.date,it.slot,it.dur,exceptId);const have=String(it.desc||'');const add=g.lines.filter(l=>!have.includes(l));if(add.length)it.desc=have?have+'\n'+add.join('\n'):add.join('\n');if(g.short)it.short=g.short}
+function absorbPh(c,it,exceptId){const g=consumePh(c,it.date,it.slot,it.dur,exceptId,!it.te);const have=String(it.desc||'');const add=g.lines.filter(l=>!have.includes(l));if(add.length)it.desc=have?have+'\n'+add.join('\n'):add.join('\n');if(g.short)it.short=g.short}
 const GEN_DEFAULT=[['praktik','praktik','studie','teori'],['praktik','praktik','praktik',''],['teori','teori','praktik','praktik'],['praktik','praktik','teori','teori'],['teori','teori','teori','']];
 const gen={tab:'pattern',pat:null,from:null,to:null,mode:'empty',lessons:null,map:{},useTitle:true,file:'',err:''};
 function genPatGet(){try{const p=JSON.parse(localStorage.getItem('regnbueskema.genpat'));if(Array.isArray(p)&&p.length===5)return p}catch(e){}return clone(GEN_DEFAULT)}
