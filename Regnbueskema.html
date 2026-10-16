@@ -194,6 +194,7 @@ textarea{resize:vertical;min-height:64px;width:100%}
 .slot:first-child{border-top:0}
 .slot.lunch{border-top:2px solid var(--line-2)}
 .slot.off{background:repeating-linear-gradient(135deg,var(--hatch) 0 5px,transparent 5px 10px)}
+.slot.half{background:repeating-linear-gradient(135deg,var(--hatch) 0 5px,transparent 5px 10px) 0 100%/100% 50% no-repeat}
 .slot .sn{position:absolute;right:4px;top:2px;font-family:var(--font-mono);font-size:10px;color:var(--muted);opacity:.0}
 .v-week .slot .sn,.v-day .slot .sn{opacity:.6}
 .period{position:absolute;inset:0;border-radius:8px;display:flex;align-items:center;justify-content:center;text-align:center;padding:4px;font-weight:700;font-size:12px;color:var(--fg);pointer-events:none;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--pc) 30%,transparent) 0 8px,color-mix(in srgb,var(--pc) 14%,transparent) 8px 16px)}
@@ -1029,14 +1030,16 @@ function seed(){
 const cur=()=>state.courses[state.currentId];
 const catOf=id=>state.categories.find(c=>c.id===id)||{id,name:id||'?',color:'#9AA1AE',room:''};
 const libOf=id=>id?state.library.find(l=>l.id===id):null;
-const modulesOn=(c,d)=>wd(d)>4?0:(+c.dayModules[wd(d)]||0);
+const modRaw=(c,d)=>wd(d)>4?0:(+c.dayModules[wd(d)]||0);const modulesOn=(c,d)=>Math.ceil(modRaw(c,d));
 const periodOn=(c,d)=>c.periods.find(p=>d>=p.from&&d<=p.to);
 const inRange=(c,d)=>d>=c.start&&d<=c.end;
 const isTeaching=(c,d)=>wd(d)<5&&inRange(c,d)&&!periodOn(c,d);
 function courseWeeks(c){const out=[];if(!c.start||!c.end||c.end<c.start)return out;for(let m=monOf(c.start);m<=c.end;m=add(m,7))out.push(m);return out}
 const roomOn=(c,d)=>(c.days[d]&&c.days[d].room)||c.roomByWeekday[wd(d)]||'';
 const reqRoom=i=>i.room||(libOf(i.libId)||{}).room||catOf(i.cat).room||'';
-const maxMods=c=>Math.max(1,...c.dayModules.map(Number));
+const maxMods=c=>Math.max(1,...c.dayModules.map(v=>Math.ceil(+v||0)));
+/* et modul kan være afkortet: af blokken selv (fra TimeEdit) eller fordi dagen slutter halvvejs i modulet (fx fredag 2,5 moduler = 12.35) */
+function itemShort(c,i){let cut=0;if(i.date){const over=i.slot+i.dur-modRaw(c,i.date);if(over>0&&over<1)cut=Math.round(over*90)}return Math.max(+i.short||0,cut)}
 const periodColor=p=>p.type==='vfu'?((state.categories.find(k=>k.id==='vfu')||{}).color||'#9466E0'):'#B4BAC6';
 function teachingWeeks(c){return courseWeeks(c).filter(m=>{for(let k=0;k<5;k++)if(isTeaching(c,add(m,k)))return true;return false})}
 
@@ -1237,7 +1240,7 @@ function renderSchedule(){
     const isSel=ui.sel&&ui.sel.type==='day'&&ui.sel.id===d;
     let h=`<div class="day"><button class="day-h ${isSel?'sel':''} ${d===t?'today':''}" data-day="${d}" title="Klik for at redigere dagen"><span class="d">${ui.view==='overview'?WD_SHORT[wd(d)]:WD_LONG[wd(d)]} <span>${dm(d)}</span>${rm?` <em class="rp" title="${ROOMS[rm]}">${ROOM_ABBR[rm]}</em>`:''}</span><span class="t">${esc(info.teacher||'')}</span></button>`;
     h+=`<div class="day-b ${inRange(c,d)?'':'outside'}" data-date="${d}" style="height:${M*H}px">`;
-    for(let s=0;s<M;s++)h+=`<div class="slot ${s===2?'lunch':''} ${s>=m?'off':''}" style="top:${s*H}px;height:${H}px"><span class="sn">${s+1}</span></div>`;
+    for(let s=0;s<M;s++)h+=`<div class="slot ${s===2?'lunch':''} ${s>=m?'off':s+1>modRaw(c,d)?'half':''}" style="top:${s*H}px;height:${H}px"><span class="sn">${s+1}</span></div>`;
     if(p)h+=`<div class="period" style="--pc:${periodColor(p)}"><span>${esc(p.label||PTYPES[p.type])}</span></div>`;
     const list=(bd[d]||[]).slice().sort((a,b)=>a.slot-b.slot||b.dur-a.dur);
     const lanes=[];const laneOf={};
@@ -1245,12 +1248,12 @@ function renderSchedule(){
     const n=Math.max(1,lanes.length);
     for(const i of list){
       const k=catOf(i.cat);const sel=ui.sel&&ui.sel.type==='item'&&ui.sel.id===i.id;
-      const top=i.slot*H+2,ht=Math.max(14,(i.dur-(i.short||0)/90)*H-4);const L=laneOf[i.id];
+      const top=i.slot*H+2,ht=Math.max(14,(i.dur-itemShort(c,i)/90)*H-4);const L=laneOf[i.id];
       /* ugevisning: enkeltmoduler viser kun overskrift og links; dobbeltblokke også beskrivelse; billeder får kun den plads, der er tilbage */
       const compact=ui.view==='week'&&i.dur<2;
       const nImg=(i.images||[]).length;const thumbs=ui.view!=='overview'&&nImg&&!compact;
       const showDesc=i.desc&&ht>=40&&!compact;
-      h+=`<div class="it ${thumbs?'hasth':''} ${(ui.sq||'').trim()&&itemHit(c,i)?'hit':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur,i.short))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
+      h+=`<div class="it ${thumbs?'hasth':''} ${(ui.sq||'').trim()&&itemHit(c,i)?'hit':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur,itemShort(cur(),i)))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
         +`<span class="n">${esc(i.name)}</span>${ui.view!=='overview'&&goodLinks(i).length&&ht>=56?`<span class="ilinks">${goodLinks(i).map(l=>`<a href="${esc(safeHref(l.url))}" target="_blank" rel="noopener" title="${esc(safeHref(l.url))}">${ICON.link}${esc(linkLabel(l))}</a>`).join('')}</span>`:''}${showDesc?`<span class="ds">${esc(i.desc)}</span>`:''}${thumbs?blockThumbs(i):''}`
         +`<span class="bd">${warnItems.has(i.id)?`<span class="w" title="Se advarsler">${ICON.warn}</span>`:''}${goodLinks(i).length?`<span class="lk2" title="${goodLinks(i).length} link${goodLinks(i).length>1?'s':''}">${ICON.link}</span>`:''}${nImg?`<span class="im2" title="${nImg} billede${nImg>1?'r':''}">${ICON.img}</span>`:''}${i.locked?ICON.lock:''}</span><span class="rs-h" aria-hidden="true"></span></div>`;
     }
@@ -1331,7 +1334,7 @@ function detailHTML(c){
   if(s.type==='item'){
     const i=c.items.find(x=>x.id===s.id);if(!i){ui.sel=null;return detailHTML(c)}
     const k=catOf(i.cat);const l=libOf(i.libId);const m=i.date?modulesOn(c,i.date):4;
-    const wh=i.date?`${WD_LONG[wd(i.date)]} ${dm(i.date)} · uge ${isoWeek(i.date)} · ${slotTime(i.slot,i.dur,i.short)}`:'Parkeret – ikke placeret';
+    const wh=i.date?`${WD_LONG[wd(i.date)]} ${dm(i.date)} · uge ${isoWeek(i.date)} · ${slotTime(i.slot,i.dur,itemShort(cur(),i))}`:'Parkeret – ikke placeret';
     return `<div class="det-head" style="--c:${k.color};--t:${textOn(k.color)}"><span class="k">${esc(k.name)}</span><span class="tt">${esc(i.name)}</span><span class="wh">${wh}</span></div>
     <div class="fld"><label for="f-name">Navn</label><input type="text" id="f-name" data-f="name" value="${esc(i.name)}"></div>
     <div class="fld"><label for="f-desc">Beskrivelse</label><textarea id="f-desc" data-f="desc">${esc(i.desc)}</textarea></div>
@@ -1339,7 +1342,7 @@ function detailHTML(c){
     ${imagesEditor(i,'item')}
     <div class="fgrid"><div class="fld"><label for="f-cat">Kategori</label><select id="f-cat" data-f="cat">${catOptions(i.cat)}</select></div>
     <div class="fld"><label for="f-room">Lokalekrav</label><select id="f-room" data-f="room">${roomOptions(i.room||'','Følg kategori')}</select></div></div>
-    <div class="fld"><span class="lbl-s">Varighed</span>${i.short?`<div class="small muted" style="margin-bottom:4px">Sidste modul er afkortet (${i.short} min) – fra skemaudtrækket. <button class="btn sm ghost" data-act="fullmod">Gør til fuldt modul</button></div>`:''}<div class="stepper"><button data-dur="-1" aria-label="Kortere">−</button><span>${i.dur} modul${i.dur>1?'er':''}${i.short?` · slutter ${slotTime(i.slot,i.dur,i.short).split('–')[1]}`:` · ${fmtH(i.dur)}`}</span><button data-dur="1" aria-label="Længere">+</button></div></div>
+    <div class="fld"><span class="lbl-s">Varighed</span>${i.short&&i.short>=itemShort(c,i)-0?`<div class="small muted" style="margin-bottom:4px">Sidste modul er afkortet (${i.short} min) – fra skemaudtrækket. <button class="btn sm ghost" data-act="fullmod">Gør til fuldt modul</button></div>`:''}<div class="stepper"><button data-dur="-1" aria-label="Kortere">−</button><span>${i.dur} modul${i.dur>1?'er':''}${itemShort(c,i)?` · slutter ${slotTime(i.slot,i.dur,itemShort(c,i)).split('–')[1]}`:` · ${fmtH(i.dur)}`}</span><button data-dur="1" aria-label="Længere">+</button></div></div>
     <label class="toggle"><input type="checkbox" id="f-lock" data-f="locked" ${i.locked?'checked':''}> Lås blokken (kan ikke flyttes eller slettes)</label>
     ${i.ph?`<div class="guide">Pladsholder fra grovskemaet. Træk en aktivitet fra biblioteket ind over den – så erstatter aktiviteten pladsholderen.</div><div class="btnrow"><button class="btn sm" data-act="unph">Gør til almindelig blok</button></div>`:''}
     ${l&&l.guide?`<div class="sec"><h3>Vejledning fra biblioteket</h3><div class="guide">${esc(l.guide)}</div></div>`:''}
@@ -1364,11 +1367,11 @@ function detailHTML(c){
   }
   if(s.type==='day'){
     const d=s.id;const info=c.days[d]||{};const p=periodOn(c,d);const list=(byDate(c)[d]||[]).slice().sort((a,b)=>a.slot-b.slot);
-    return `<div class="det-head det-plain"><span class="k">Dag · uge ${isoWeek(d)}</span><span class="tt">${WD_LONG[wd(d)]} ${longDate(d)}</span><span class="wh">${modulesOn(c,d)} moduler${p?' · '+esc(p.label||PTYPES[p.type]):''}${inRange(c,d)?'':' · uden for forløbet'}</span></div>
+    return `<div class="det-head det-plain"><span class="k">Dag · uge ${isoWeek(d)}</span><span class="tt">${WD_LONG[wd(d)]} ${longDate(d)}</span><span class="wh">${String(modRaw(c,d)).replace('.',',')} moduler${p?' · '+esc(p.label||PTYPES[p.type]):''}${inRange(c,d)?'':' · uden for forløbet'}</span></div>
     <div class="fld"><label for="d-teacher">Lærer(e)</label><input type="text" id="d-teacher" data-df="teacher" value="${esc(info.teacher||'')}" placeholder="Fx Søren og Morten"></div>
     <div class="fld"><label for="d-room">Lokale denne dag</label><select id="d-room" data-df="room">${roomOptions(info.room||'','Følg ugedag ('+(ROOMS[c.roomByWeekday[wd(d)]]||'ikke angivet').toLowerCase()+')')}</select></div>
     <div class="fld"><label for="d-note">Note</label><input type="text" id="d-note" data-df="note" value="${esc(info.note||'')}"></div>
-    <div class="sec"><h3>Aktiviteter</h3><div class="daylist">${list.map(i=>`<button data-goto="${i.id}" style="--c:${catOf(i.cat).color}"><span class="dot"></span><span>${esc(i.name)}</span><span class="tm">${slotTime(i.slot,i.dur,i.short)}</span></button>`).join('')||'<span class="muted small">Ingen aktiviteter.</span>'}</div></div>
+    <div class="sec"><h3>Aktiviteter</h3><div class="daylist">${list.map(i=>`<button data-goto="${i.id}" style="--c:${catOf(i.cat).color}"><span class="dot"></span><span>${esc(i.name)}</span><span class="tm">${slotTime(i.slot,i.dur,itemShort(cur(),i))}</span></button>`).join('')||'<span class="muted small">Ingen aktiviteter.</span>'}</div></div>
     <div class="btnrow"><button class="btn sm" data-goday="${d}">Åbn dagsvisning</button>${list.length?`<button class="btn sm danger" data-clearday="${d}" data-confirm="Klik igen for at rydde dagen">Ryd dagen</button>`:''}</div>`;
   }
   if(s.type==='week'){
@@ -1671,7 +1674,7 @@ function openWizard(edit){
     <div class="step"><span class="sn">1</span><div><h4>Hold</h4><div class="fld"><label for="w-name">Navn på holdet</label><input type="text" id="w-name" value="${esc(base.name)}" placeholder="Fx GF2 Tømrer januar 2027" required></div></div></div>
     <div class="step"><span class="sn">2</span><div><h4>Periode</h4><div class="fgrid"><div class="fld"><label for="w-start">Startdato</label>${dpBtn('id="w-start" data-dprole="start"',base.start)}</div><div class="fld"><label for="w-end">Slutdato</label>${dpBtn('id="w-end" data-dprole="end"',base.end)}</div></div><div class="small muted" id="w-span"></div></div></div>
     <div class="step"><span class="sn">3</span><div><h4>Ferier, fridage og VFU</h4><div id="w-periods"></div><div class="btnrow"><button type="button" class="btn sm" data-addp="ferie">+ Ferie</button><button type="button" class="btn sm" data-addp="vfu">+ VFU-periode</button><button type="button" class="btn sm" data-addp="fri">+ Fridag</button><button type="button" class="btn sm ghost" id="w-holi">Tilføj danske helligdage</button></div></div></div>
-    <div class="step"><span class="sn">4</span><div><h4>Moduler og lokaler pr. ugedag</h4><div class="wd-grid">${[0,1,2,3,4].map(k=>`<div class="fld"><label for="w-m${k}">${WD_LONG[k]}</label><input type="number" min="0" max="4" id="w-m${k}" value="${base.dayModules[k]}"><select id="w-r${k}" aria-label="Lokale ${WD_LONG[k]}">${roomOptions(base.roomByWeekday[k]||'','Lokale?')}</select></div>`).join('')}</div><div class="small muted">Moduler á 90 min: 8.00–9.30 · 9.50–11.20 · 11.50–13.20 · 13.40–15.10. Lokalet kan også sættes pr. dag ved at klikke på dagen i skemaet.</div></div></div>
+    <div class="step"><span class="sn">4</span><div><h4>Moduler og lokaler pr. ugedag</h4><div class="wd-grid">${[0,1,2,3,4].map(k=>`<div class="fld"><label for="w-m${k}">${WD_LONG[k]}</label><input type="number" min="0" max="4" step="0.5" id="w-m${k}" value="${base.dayModules[k]}" title="Fx 2,5 = sidste modul slutter halvvejs (12.35)"><select id="w-r${k}" aria-label="Lokale ${WD_LONG[k]}">${roomOptions(base.roomByWeekday[k]||'','Lokale?')}</select></div>`).join('')}</div><div class="small muted">Moduler á 90 min: 8.00–9.30 · 9.50–11.20 · 11.50–13.20 · 13.40–15.10. Lokalet kan også sættes pr. dag ved at klikke på dagen i skemaet.</div></div></div>
     ${edit?'':`<div class="step"><span class="sn">5</span><div><h4>Startpunkt</h4><div class="small muted" style="margin-bottom:6px">Har du et eksisterende skema i PowerPoint, Word eller Excel? <button type="button" class="btn sm" id="w-old">Importér det først</button></div><div class="src-opt"><label><input type="radio" name="w-src" value="empty" checked><span><b>Tomt skema</b><br><span class="small muted">Byg fra bunden med biblioteket.</span></span></label>${others.map(o=>`<label><input type="radio" name="w-src" value="${o.id}"><span><b>Kopiér ${esc(o.name)}</b><br><span class="small muted">Undervisningsuge 1 lægges i undervisningsuge 1 osv. Ferie- og VFU-uger springes over. Blokke der ikke kan få plads, parkeres.</span></span></label>`).join('')}</div></div></div>`}
     <div class="err-msg" id="w-err" hidden></div>
   </div>
@@ -1743,7 +1746,7 @@ function submitWizard(){
   if(!c.start||!c.end)return showWErr('Angiv både start- og slutdato.');
   if(c.end<c.start)return showWErr('Slutdatoen ligger før startdatoen.');
   if(courseWeeks(c).length>60)return showWErr('Forløbet er over 60 uger. Tjek årstallet i datoerne.');
-  for(let k=0;k<5;k++){c.dayModules[k]=Math.max(0,Math.min(4,parseInt($('w-m'+k).value)||0));c.roomByWeekday[k]=$('w-r'+k).value}
+  for(let k=0;k<5;k++){c.dayModules[k]=Math.max(0,Math.min(4,Math.round((parseFloat(String($('w-m'+k).value).replace(',','.'))||0)*2)/2));c.roomByWeekday[k]=$('w-r'+k).value}
   c.periods=c.periods.filter(p=>p.from&&p.to);
   if(wiz.edit){pushUndo();state.courses[c.id]=c;closeModal();ui.weekMon=null;changed();toast('Indstillingerne er gemt');return}
   const src=(document.querySelector('input[name=w-src]:checked')||{}).value;
@@ -1990,7 +1993,7 @@ function impCourse(col,link){
   const W=col.W;const c=newCourse({name:imp.name||'Importeret skema',start:W[0].mon,end:add(W[W.length-1].mon,4),note:'Importeret fra '+imp.file});
   c.periods=col.periods.map(p=>Object.assign({id:uid()},p));c.weeks=clone(col.weeks);c.days=clone(col.days);
   const per={};
-  const te=imp.res&&imp.res.kind==='lessons'&&!imp.asPh;for(const b of col.blocks){c.items.push({id:uid(),te,date:b.date,slot:b.slot,dur:b.dur,short:b.short||0,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:!!imp.asPh});per[b.date]=Math.max(per[b.date]||0,b.slot+b.dur)}
+  const te=imp.res&&imp.res.kind==='lessons'&&!imp.asPh;for(const b of col.blocks){c.items.push({id:uid(),te,date:b.date,slot:b.slot,dur:b.dur,short:b.short||0,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:!!imp.asPh});per[b.date]=Math.max(per[b.date]||0,Math.round((b.slot+b.dur-(b.short||0)/90)*2)/2)}
   const ends=[[],[],[],[],[]];for(const d in per)ends[wd(d)].push(per[d]);
   c.dayModules=c.dayModules.map((def,k)=>{const a=ends[k];if(!a.length)return def;const cnt={};a.forEach(v=>cnt[v]=(cnt[v]||0)+1);return +Object.entries(cnt).sort((x,y)=>y[1]-x[1]||y[0]-x[0])[0][0]});
   return c;
@@ -2129,7 +2132,7 @@ function weekText(m){
     if(p){t+=`  ${p.label||PTYPES[p.type]}\n`;continue}
     const list=(bd[d]||[]).slice().sort((a,b)=>a.slot-b.slot);
     if(!list.length){t+='  –\n';continue}
-    for(const i of list){t+=`  ${slotTime(i.slot,i.dur,i.short).padEnd(12)} ${i.name}${i.desc?' ('+i.desc.replace(/\s*\n\s*/g,', ')+')':''}\n`;for(const l of goodLinks(i))t+=`${''.padEnd(15)}→ ${linkLabel(l)}: ${safeHref(l.url)}\n`}}
+    for(const i of list){t+=`  ${slotTime(i.slot,i.dur,itemShort(cur(),i)).padEnd(12)} ${i.name}${i.desc?' ('+i.desc.replace(/\s*\n\s*/g,', ')+')':''}\n`;for(const l of goodLinks(i))t+=`${''.padEnd(15)}→ ${linkLabel(l)}: ${safeHref(l.url)}\n`}}
   return t;
 }
 function copyWeek(m){
@@ -2376,7 +2379,7 @@ function exportXLSX(){
   if(!window.XLSX){toast('Excel-modulet er ikke indlæst');return}
   const c=cur();const wb=XLSX.utils.book_new();
   const rows=[['Uge','Forløbsdel','Dato','Ugedag','Modul','Tid','Moduler','Timer','Aktivitet','Beskrivelse','Kategori','Lærer','Lokale','Links']];
-  placed(c).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot).forEach(i=>rows.push([isoWeek(i.date),(c.weeks[monOf(i.date)]||{}).label||'',D(i.date),WD_LONG[wd(i.date)],i.slot+1,slotTime(i.slot,i.dur,i.short),i.dur,i.dur*1.5,i.name,i.desc,catOf(i.cat).name,(c.days[i.date]||{}).teacher||'',ROOMS[roomOn(c,i.date)]||'',goodLinks(i).map(l=>linkLabel(l)+': '+safeHref(l.url)).join('\n')]));
+  placed(c).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot).forEach(i=>rows.push([isoWeek(i.date),(c.weeks[monOf(i.date)]||{}).label||'',D(i.date),WD_LONG[wd(i.date)],i.slot+1,slotTime(i.slot,i.dur,itemShort(cur(),i)),i.dur,i.dur*1.5,i.name,i.desc,catOf(i.cat).name,(c.days[i.date]||{}).teacher||'',ROOMS[roomOn(c,i.date)]||'',goodLinks(i).map(l=>linkLabel(l)+': '+safeHref(l.url)).join('\n')]));
   const ws1=XLSX.utils.aoa_to_sheet(rows,{cellDates:true});ws1['!cols']=[6,14,11,10,7,12,8,7,34,40,12,18,12,50].map(w=>({wch:w}));
   for(let r=1;r<rows.length;r++){const a=XLSX.utils.encode_cell({r,c:2});if(ws1[a])ws1[a].z='dd-mm-yyyy'}
   ws1['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:13}})};
@@ -2465,10 +2468,10 @@ function drawWeekPage(doc,c,m,pi){
       const d=add(m,k);const x=X0+k*colW;const info=c.days[d]||{};
       doc.setFillColor(243,245,248);doc.roundedRect(x+1,21.5,colW-2,8,2,2,'F');doc.setTextColor(24,29,43);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(`${WD_LONG[k].toUpperCase()} d. ${dm(d)}`,x+3,25);doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(90,96,112);doc.text(pdfTxt(info.teacher||''),x+3,28.4);
       const p=periodOn(c,d);
-      for(let s=0;s<M;s++){const y=Y0+s*rowHh;if(s>=modulesOn(c,d)||!inRange(c,d)){doc.setFillColor(236,238,242);doc.roundedRect(x+1,y+1,colW-2,rowHh-2,2,2,'F')}else{doc.setDrawColor(214,219,228);doc.setLineWidth(.2);doc.roundedRect(x+1,y+1,colW-2,rowHh-2,2,2,'S')}}
+      for(let s=0;s<M;s++){const y=Y0+s*rowHh;if(s>=modulesOn(c,d)||!inRange(c,d)){doc.setFillColor(236,238,242);doc.roundedRect(x+1,y+1,colW-2,rowHh-2,2,2,'F')}else{doc.setDrawColor(214,219,228);doc.setLineWidth(.2);doc.roundedRect(x+1,y+1,colW-2,rowHh-2,2,2,'S');if(s+1>modRaw(c,d)){doc.setFillColor(236,238,242);doc.roundedRect(x+1,y+rowHh/2,colW-2,rowHh/2-1,2,2,'F')}}}
       if(p){const[r,g,b]=hexRGB(periodColor(p));doc.setFillColor(Math.round(r*.35+255*.65),Math.round(g*.35+255*.65),Math.round(b*.35+255*.65));doc.roundedRect(x+1,Y0+1,colW-2,M*rowHh-2,2.5,2.5,'F');doc.setTextColor(24,29,43);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(pdfTxt(p.label||PTYPES[p.type]),x+colW/2,Y0+M*rowHh/2,{align:'center'})}
       const list=(bd[d]||[]).slice().sort((a,b)=>a.slot-b.slot);const lanes=[];const lo={};for(const i of list){let L=lanes.findIndex(e=>e<=i.slot);if(L<0){L=lanes.length;lanes.push(0)}lanes[L]=i.slot+i.dur;lo[i.id]=L}const n=Math.max(1,lanes.length);
-      for(const i of list){const k2=catOf(i.cat);const[r,g,b]=hexRGB(k2.color);const lw=(colW-2)/n;const ix=x+1+lo[i.id]*lw,iy=Y0+i.slot*rowHh+1,iw=lw-(n>1?1:0),ih=(Math.min(i.dur,M-i.slot)-(i.short||0)/90)*rowHh-2;
+      for(const i of list){const k2=catOf(i.cat);const[r,g,b]=hexRGB(k2.color);const lw=(colW-2)/n;const ix=x+1+lo[i.id]*lw,iy=Y0+i.slot*rowHh+1,iw=lw-(n>1?1:0),ih=(Math.min(i.dur,M-i.slot)-itemShort(c,i)/90)*rowHh-2;
         if(doc.hits)doc.hits.push({id:i.id,x:ix,y:iy,w:iw,h:ih});
         doc.setFillColor(r,g,b);doc.roundedRect(ix,iy,iw,ih,2.5,2.5,'F');const tc=textOn(k2.color)==='#FFFFFF'?255:20;doc.setTextColor(tc,tc,tc);
         let tw=iw-4;const pim=(i.images||[]).map(imgSrc).find(Boolean);let ar=4/3;
