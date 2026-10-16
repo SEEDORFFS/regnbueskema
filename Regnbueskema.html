@@ -1392,7 +1392,7 @@ function placeLib(libId,date,slot){
   const c=cur();const l=libOf(libId);if(!l)return;
   if(weekLocked(c,date)){toast(`Uge ${isoWeek(date)} er låst`);return}
   const it={id:uid(),date,slot,dur:Math.max(1,Math.min(4,+l.dur||1)),cat:l.cat,name:l.name,desc:l.desc||'',libId:l.id,locked:false,links:clone(l.links||[]),images:(l.images||[]).slice()};
-  mutate(()=>{consumePh(c,date,slot,it.dur);c.items.push(it);ui.popId=it.id;ui.sel={type:'item',id:it.id}});quest('place');
+  mutate(()=>{absorbPh(c,it);c.items.push(it);ui.popId=it.id;ui.sel={type:'item',id:it.id}});quest('place');
 }
 function delItem(id){const c=cur();const i=c.items.find(x=>x.id===id);if(!i||i.locked)return;if(weekLocked(c,i.date)){toast(`Uge ${isoWeek(i.date)} er låst`);return}mutate(()=>{c.items=c.items.filter(x=>x.id!==id);if(ui.sel&&ui.sel.id===id)ui.sel=null});toast(`„${i.name}“ slettet`,'Fortryd',undo)}
 function dupItem(id){
@@ -1485,9 +1485,9 @@ function endDrag(copy){
   if(t.type==='park'){if(weekLocked(c,i.date)){toast('Ugen er låst');return}mutate(()=>{i.date=null});toast(`„${i.name}“ parkeret`);return}
   if(t.type==='day'){
     if(weekLocked(c,t.date)||weekLocked(c,i.date)){toast(`Ugen er låst`);return}
-    if(copy){const n=Object.assign(clone(i),{id:uid(),date:t.date,slot:t.slot,locked:false});mutate(()=>{if(!n.ph)consumePh(c,t.date,t.slot,n.dur,n.id);c.items.push(n);ui.popId=n.id;ui.sel={type:'item',id:n.id}});toast('Kopi placeret');return}
+    if(copy){const n=Object.assign(clone(i),{id:uid(),date:t.date,slot:t.slot,locked:false});mutate(()=>{if(!n.ph)absorbPh(c,n,n.id);c.items.push(n);ui.popId=n.id;ui.sel={type:'item',id:n.id}});toast('Kopi placeret');return}
     if(i.date===t.date&&i.slot===t.slot)return;
-    mutate(()=>{if(!i.ph)consumePh(c,t.date,t.slot,i.dur,i.id);i.date=t.date;i.slot=t.slot;ui.popId=i.id;ui.sel={type:'item',id:i.id}});quest('move');
+    mutate(()=>{i.date=t.date;i.slot=t.slot;if(!i.ph)absorbPh(c,i,i.id);ui.popId=i.id;ui.sel={type:'item',id:i.id}});quest('move');
   }
 }
 
@@ -2139,7 +2139,11 @@ function copyWeek(m){
 
 /* ---------- grovskema ---------- */
 function splitPh(c,i,s,e){const a=i.slot,b=i.slot+i.dur;if(e<=a||s>=b)return;c.items=c.items.filter(x=>x!==i);if(s>a)c.items.push(Object.assign(clone(i),{id:uid(),dur:s-a}));if(e<b)c.items.push(Object.assign(clone(i),{id:uid(),slot:e,dur:b-e}))}
-function consumePh(c,date,slot,dur,exceptId){for(const x of c.items.slice())if(x.ph&&x.id!==exceptId&&x.date===date&&x.slot<slot+dur&&slot<x.slot+x.dur)splitPh(c,x,slot,slot+dur)}
+function consumePh(c,date,slot,dur,exceptId){const got={lines:[],short:0};for(const x of c.items.slice())if(x.ph&&x.id!==exceptId&&x.date===date&&x.slot<slot+dur&&slot<x.slot+x.dur){
+    for(const l of String(x.desc||'').split('\n'))if(/^\s*(lokale:|\d{1,2}[.:]\d{2}:)/i.test(l)&&!got.lines.includes(l.trim()))got.lines.push(l.trim());
+    if(x.short&&x.slot+x.dur===slot+dur)got.short=x.short;splitPh(c,x,slot,slot+dur)}return got}
+/* når en aktivitet erstatter en pladsholder, overtager den lokale (og andre fag i modulet) samt et afkortet sidste modul */
+function absorbPh(c,it,exceptId){const g=consumePh(c,it.date,it.slot,it.dur,exceptId);const have=String(it.desc||'');const add=g.lines.filter(l=>!have.includes(l));if(add.length)it.desc=have?have+'\n'+add.join('\n'):add.join('\n');if(g.short)it.short=g.short}
 const GEN_DEFAULT=[['praktik','praktik','studie','teori'],['praktik','praktik','praktik',''],['teori','teori','praktik','praktik'],['praktik','praktik','teori','teori'],['teori','teori','teori','']];
 const gen={tab:'pattern',pat:null,from:null,to:null,mode:'empty',lessons:null,map:{},useTitle:true,file:'',err:''};
 function genPatGet(){try{const p=JSON.parse(localStorage.getItem('regnbueskema.genpat'));if(Array.isArray(p)&&p.length===5)return p}catch(e){}return clone(GEN_DEFAULT)}
