@@ -994,7 +994,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const clone=o=>JSON.parse(JSON.stringify(o));
 const $=id=>document.getElementById(id);
 function textOn(hex){const h=(hex||'#999').replace('#','');const r=parseInt(h.slice(0,2),16)/255,g=parseInt(h.slice(2,4),16)/255,b=parseInt(h.slice(4,6),16)/255;const L=x=>x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4);const l=.2126*L(r)+.7152*L(g)+.0722*L(b);return l>.36?'#14171F':'#FFFFFF'}
-function slotTime(slot,dur){const a=SLOT_TIMES[Math.min(slot,3)][0],b=SLOT_TIMES[Math.min(slot+dur-1,3)][1];return a+'–'+b}
+const tMin=t=>{const m=String(t).match(/(\d{1,2})[.:](\d{2})/);return m?+m[1]*60+ +m[2]:0};const tFmt=m=>Math.floor(m/60)+'.'+String(m%60).padStart(2,'0');
+function slotTime(slot,dur,short){const a=SLOT_TIMES[Math.min(slot,3)][0];let b=SLOT_TIMES[Math.min(slot+dur-1,3)][1];if(short>0)b=tFmt(tMin(b)-short);return a+'–'+b}
 
 /* ================= state ================= */
 let state=null;
@@ -1243,12 +1244,12 @@ function renderSchedule(){
     const n=Math.max(1,lanes.length);
     for(const i of list){
       const k=catOf(i.cat);const sel=ui.sel&&ui.sel.type==='item'&&ui.sel.id===i.id;
-      const top=i.slot*H+2,ht=Math.max(14,i.dur*H-4);const L=laneOf[i.id];
+      const top=i.slot*H+2,ht=Math.max(14,(i.dur-(i.short||0)/90)*H-4);const L=laneOf[i.id];
       /* ugevisning: enkeltmoduler viser kun overskrift og links; dobbeltblokke også beskrivelse; billeder får kun den plads, der er tilbage */
       const compact=ui.view==='week'&&i.dur<2;
       const nImg=(i.images||[]).length;const thumbs=ui.view!=='overview'&&nImg&&!compact;
       const showDesc=i.desc&&ht>=40&&!compact;
-      h+=`<div class="it ${thumbs?'hasth':''} ${(ui.sq||'').trim()&&itemHit(c,i)?'hit':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
+      h+=`<div class="it ${thumbs?'hasth':''} ${(ui.sq||'').trim()&&itemHit(c,i)?'hit':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur,i.short))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
         +`<span class="n">${esc(i.name)}</span>${ui.view!=='overview'&&goodLinks(i).length&&ht>=56?`<span class="ilinks">${goodLinks(i).map(l=>`<a href="${esc(safeHref(l.url))}" target="_blank" rel="noopener" title="${esc(safeHref(l.url))}">${ICON.link}${esc(linkLabel(l))}</a>`).join('')}</span>`:''}${showDesc?`<span class="ds">${esc(i.desc)}</span>`:''}${thumbs?blockThumbs(i):''}`
         +`<span class="bd">${warnItems.has(i.id)?`<span class="w" title="Se advarsler">${ICON.warn}</span>`:''}${goodLinks(i).length?`<span class="lk2" title="${goodLinks(i).length} link${goodLinks(i).length>1?'s':''}">${ICON.link}</span>`:''}${nImg?`<span class="im2" title="${nImg} billede${nImg>1?'r':''}">${ICON.img}</span>`:''}${i.locked?ICON.lock:''}</span><span class="rs-h" aria-hidden="true"></span></div>`;
     }
@@ -1329,7 +1330,7 @@ function detailHTML(c){
   if(s.type==='item'){
     const i=c.items.find(x=>x.id===s.id);if(!i){ui.sel=null;return detailHTML(c)}
     const k=catOf(i.cat);const l=libOf(i.libId);const m=i.date?modulesOn(c,i.date):4;
-    const wh=i.date?`${WD_LONG[wd(i.date)]} ${dm(i.date)} · uge ${isoWeek(i.date)} · ${slotTime(i.slot,i.dur)}`:'Parkeret – ikke placeret';
+    const wh=i.date?`${WD_LONG[wd(i.date)]} ${dm(i.date)} · uge ${isoWeek(i.date)} · ${slotTime(i.slot,i.dur,i.short)}`:'Parkeret – ikke placeret';
     return `<div class="det-head" style="--c:${k.color};--t:${textOn(k.color)}"><span class="k">${esc(k.name)}</span><span class="tt">${esc(i.name)}</span><span class="wh">${wh}</span></div>
     <div class="fld"><label for="f-name">Navn</label><input type="text" id="f-name" data-f="name" value="${esc(i.name)}"></div>
     <div class="fld"><label for="f-desc">Beskrivelse</label><textarea id="f-desc" data-f="desc">${esc(i.desc)}</textarea></div>
@@ -1337,7 +1338,7 @@ function detailHTML(c){
     ${imagesEditor(i,'item')}
     <div class="fgrid"><div class="fld"><label for="f-cat">Kategori</label><select id="f-cat" data-f="cat">${catOptions(i.cat)}</select></div>
     <div class="fld"><label for="f-room">Lokalekrav</label><select id="f-room" data-f="room">${roomOptions(i.room||'','Følg kategori')}</select></div></div>
-    <div class="fld"><span class="lbl-s">Varighed</span><div class="stepper"><button data-dur="-1" aria-label="Kortere">−</button><span>${i.dur} modul${i.dur>1?'er':''} · ${fmtH(i.dur)}</span><button data-dur="1" aria-label="Længere">+</button></div></div>
+    <div class="fld"><span class="lbl-s">Varighed</span>${i.short?`<div class="small muted" style="margin-bottom:4px">Sidste modul er afkortet (${i.short} min) – fra skemaudtrækket. <button class="btn sm ghost" data-act="fullmod">Gør til fuldt modul</button></div>`:''}<div class="stepper"><button data-dur="-1" aria-label="Kortere">−</button><span>${i.dur} modul${i.dur>1?'er':''}${i.short?` · slutter ${slotTime(i.slot,i.dur,i.short).split('–')[1]}`:` · ${fmtH(i.dur)}`}</span><button data-dur="1" aria-label="Længere">+</button></div></div>
     <label class="toggle"><input type="checkbox" id="f-lock" data-f="locked" ${i.locked?'checked':''}> Lås blokken (kan ikke flyttes eller slettes)</label>
     ${i.ph?`<div class="guide">Pladsholder fra grovskemaet. Træk en aktivitet fra biblioteket ind over den – så erstatter aktiviteten pladsholderen.</div><div class="btnrow"><button class="btn sm" data-act="unph">Gør til almindelig blok</button></div>`:''}
     ${l&&l.guide?`<div class="sec"><h3>Vejledning fra biblioteket</h3><div class="guide">${esc(l.guide)}</div></div>`:''}
@@ -1366,7 +1367,7 @@ function detailHTML(c){
     <div class="fld"><label for="d-teacher">Lærer(e)</label><input type="text" id="d-teacher" data-df="teacher" value="${esc(info.teacher||'')}" placeholder="Fx Søren og Morten"></div>
     <div class="fld"><label for="d-room">Lokale denne dag</label><select id="d-room" data-df="room">${roomOptions(info.room||'','Følg ugedag ('+(ROOMS[c.roomByWeekday[wd(d)]]||'ikke angivet').toLowerCase()+')')}</select></div>
     <div class="fld"><label for="d-note">Note</label><input type="text" id="d-note" data-df="note" value="${esc(info.note||'')}"></div>
-    <div class="sec"><h3>Aktiviteter</h3><div class="daylist">${list.map(i=>`<button data-goto="${i.id}" style="--c:${catOf(i.cat).color}"><span class="dot"></span><span>${esc(i.name)}</span><span class="tm">${slotTime(i.slot,i.dur)}</span></button>`).join('')||'<span class="muted small">Ingen aktiviteter.</span>'}</div></div>
+    <div class="sec"><h3>Aktiviteter</h3><div class="daylist">${list.map(i=>`<button data-goto="${i.id}" style="--c:${catOf(i.cat).color}"><span class="dot"></span><span>${esc(i.name)}</span><span class="tm">${slotTime(i.slot,i.dur,i.short)}</span></button>`).join('')||'<span class="muted small">Ingen aktiviteter.</span>'}</div></div>
     <div class="btnrow"><button class="btn sm" data-goday="${d}">Åbn dagsvisning</button>${list.length?`<button class="btn sm danger" data-clearday="${d}" data-confirm="Klik igen for at rydde dagen">Ryd dagen</button>`:''}</div>`;
   }
   if(s.type==='week'){
@@ -1494,7 +1495,7 @@ function startResize(e,el,i){
   const c=cur();const H=rowH();const y0=e.clientY;const d0=i.dur;const max=maxMods(c)-i.slot;let nd=d0;
   document.body.classList.add('resizing');
   const mv=ev=>{nd=Math.max(1,Math.min(max,d0+Math.round((ev.clientY-y0)/H)));el.style.height=(nd*H-4)+'px'};
-  const up=()=>{document.removeEventListener('pointermove',mv);document.removeEventListener('pointerup',up);document.body.classList.remove('resizing');suppressClick=true;setTimeout(()=>suppressClick=false,0);if(nd!==d0){mutate(()=>{i.dur=nd;ui.sel={type:'item',id:i.id}});quest('resize')}else renderSchedule()};
+  const up=()=>{document.removeEventListener('pointermove',mv);document.removeEventListener('pointerup',up);document.body.classList.remove('resizing');suppressClick=true;setTimeout(()=>suppressClick=false,0);if(nd!==d0){mutate(()=>{i.dur=nd;i.short=0;ui.sel={type:'item',id:i.id}});quest('resize')}else renderSchedule()};
   document.addEventListener('pointermove',mv);document.addEventListener('pointerup',up);
 }
 
@@ -1532,7 +1533,7 @@ document.addEventListener('click',e=>{
   if(b=t.closest('[data-libcat]')){const k=b.dataset.libcat;ui.cats.has(k)?ui.cats.delete(k):ui.cats.add(k);renderLibrary();return}
   if(b=t.closest('[data-libgroup]')){const k=b.dataset.libgroup;ui.collapsed[k]=!ui.collapsed[k];renderLibrary();return}
   if(b=t.closest('[data-arm]')){arm(ui.armed===b.dataset.arm?null:b.dataset.arm);return}
-  if(b=t.closest('[data-dur]')){const i=c.items.find(x=>x.id===ui.sel.id);if(!i||i.locked)return;const nd=Math.max(1,Math.min(4,i.dur+(+b.dataset.dur)));if(nd!==i.dur)mutate(()=>{i.dur=nd});return}
+  if(b=t.closest('[data-dur]')){const i=c.items.find(x=>x.id===ui.sel.id);if(!i||i.locked)return;const nd=Math.max(1,Math.min(4,i.dur+(+b.dataset.dur)));if(nd!==i.dur||i.short)mutate(()=>{i.dur=nd;i.short=0});return}
   if(b=t.closest('[data-act]')){itemAction(b.dataset.act);return}
   if(b=t.closest('[data-libdel]')){const id=b.dataset.libdel;mutate(()=>{state.library=state.library.filter(l=>l.id!==id);c.items.forEach(i=>{if(i.libId===id)i.libId=null});ui.sel=null;if(ui.armed===id)ui.armed=null});toast('Aktiviteten er slettet fra biblioteket','Fortryd',undo);return}
   if(b=t.closest('[data-clearday]')){const d=b.dataset.clearday;if(weekLocked(c,d)){toast('Ugen er låst');return}mutate(()=>{c.items=c.items.filter(i=>i.date!==d||i.locked)});toast('Dagen er ryddet','Fortryd',undo);return}
@@ -1559,6 +1560,7 @@ function itemAction(a){
   if(a==='del')return delItem(i.id);
   if(a==='dup')return dupItem(i.id);
   if(a==='unph'){mutate(()=>{i.ph=false});return}
+  if(a==='fullmod'){mutate(()=>{i.short=0});return}
   if(a==='park'){mutate(()=>{i.date=null});toast(`„${i.name}“ parkeret`);return}
   if(a==='tolib'){
     const l=libOf(i.libId);
@@ -1887,7 +1889,7 @@ async function parseDOCX(zip){
 }
 function nearestCat(hex){if(!hex||hex==='none')return'';const[r,g,b]=hexRGB('#'+hex);let best='',bd=1e9;for(const k of state.categories){const[x,y,z]=hexRGB(k.color);const d=Math.hypot(r-x,g-y,b-z);if(d<bd){bd=d;best=k.id}}return bd<140?best:''}
 /* lektionsliste (fx TimeEdit) → uger med blokke pr. modul; samme fag i træk lægges sammen (ikke hen over frokost) */
-function lessonCat(title){const t=String(title||'').toLowerCase();if(/læreplads/.test(t))return'studie';const hit=state.library.filter(l=>l.name.length>=5&&t.includes(l.name.toLowerCase())).sort((a,b)=>b.name.length-a.name.length)[0];return hit?hit.cat:guessCat(title)}
+function lessonCat(title){const t=String(title||'').toLowerCase();if(/læreplads/.test(t))return'studie';if(/førstehjælp|stillads|brandforanst|brandkursus|kørekort/.test(t))return'prover';const hit=state.library.filter(l=>l.name.length>=5&&t.includes(l.name.toLowerCase())).sort((a,b)=>b.name.length-a.name.length)[0];return hit?hit.cat:guessCat(title)}
 function lessonsToPages(L){
   const by={};for(const l of L){if(wd(l.date)>4)continue;const m=monOf(l.date);((by[m]||(by[m]={}))[l.date]||(by[m][l.date]=[])).push(l)}
   return Object.keys(by).sort().map(mon=>{const days={},blocks=[];
@@ -1898,8 +1900,9 @@ function lessonsToPages(L){
       let prev=null;for(let s=0;s<4;s++){const g=slots[s];if(!g){prev=null;continue}const cnt={};g.forEach(l=>cnt[l.title]=(cnt[l.title]||0)+1);const lp=g.find(l=>/læreplads/i.test(l.title));const title=lp?lp.title:Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
         const room=[...new Set(g.filter(l=>l.title===title).flatMap(l=>String(l.room||'').split(/\s*,\s*/)).filter(Boolean))].join(', ');
         const other=[...new Set(g.filter(l=>l.title!==title).map(l=>l.start.replace(':','.')+': '+l.title))];
-        if(prev&&prev.title===title&&prev.room===room&&s!==2&&!other.length&&!prev.mixed){prev.dur++;continue}
-        prev={k,slot:s,dur:1,fill:'fag:'+title,text:title,title,room,mixed:other.length>0,extra:[...other,room?'Lokale: '+room:''].filter(Boolean).join('\n'),y:s};blocks.push(prev)}}
+        const endM=Math.max(0,...g.filter(l=>l.title===title).map(l=>l.end?tMin(l.end):0));const modEnd=tMin(SLOT_TIMES[s][1]);const short=endM&&endM<modEnd-10?modEnd-endM:0;
+        if(prev&&prev.title===title&&prev.room===room&&s!==2&&!other.length&&!prev.mixed&&!prev.short){prev.dur++;prev.short=short;continue}
+        prev={k,slot:s,dur:1,short,fill:'fag:'+title,text:title,title,room,mixed:other.length>0,extra:[...other,room?'Lokale: '+room:''].filter(Boolean).join('\n'),y:s};blocks.push(prev)}}
     return{days,blocks,legend:{},weekNo:isoWeek(mon),label:'',head:'',rowMods:null,firstDate:Object.keys(by[mon]).sort()[0]}})}
 async function readOldFile(f){
   const n=f.name.toLowerCase();imp.err='';imp.res=null;imp.file=f.name;
@@ -1978,7 +1981,7 @@ function impCollect(){_roomCat=null;
     for(const b0 of p.blocks){const b=plan&&b0.r0!==undefined?Object.assign({},b0,(()=>{const st=rowStarts(plan);return{slot:st[b0.r0],dur:Math.max(1,st[b0.r1]+plan[b0.r1]-st[b0.r0])}})()):b0;const d=add(mon,b.k);const first=trivName(b.text.split('\n')[0]);
       if(DAYOFF.test(first)){const prev=out.periods[out.periods.length-1];if(prev&&prev.label===first&&d>prev.to&&d<=add(prev.to,3))prev.to=d;else if(!out.periods.some(x=>d>=x.from&&d<=x.to))out.periods.push({type:/vfu/i.test(first)?'vfu':'ferie',label:first,from:d,to:d});continue}
       let cat=imp.map[b.fill];if(!cat)continue;if(cat==='room')cat=roomCatOf(b.room)||guessCat(b.text)||'teori';if(cat==='guess')cat=guessCat(b.text)||'teori';if(!state.categories.some(x=>x.id===cat))continue;
-      out.blocks.push(Object.assign({date:d,slot:b.slot,dur:b.dur,cat,hasText:!!b.text.trim()},(()=>{const nd=nameDesc(b.text,cat);if(b.extra)nd.desc=nd.desc?nd.desc+'\n'+b.extra:b.extra;return nd})()))}
+      out.blocks.push(Object.assign({date:d,slot:b.slot,dur:b.dur,short:b.short||0,cat,hasText:!!b.text.trim()},(()=>{const nd=nameDesc(b.text,cat);if(b.extra)nd.desc=nd.desc?nd.desc+'\n'+b.extra:b.extra;return nd})()))}
   }
   return out;
 }
@@ -1986,7 +1989,7 @@ function impCourse(col,link){
   const W=col.W;const c=newCourse({name:imp.name||'Importeret skema',start:W[0].mon,end:add(W[W.length-1].mon,4),note:'Importeret fra '+imp.file});
   c.periods=col.periods.map(p=>Object.assign({id:uid()},p));c.weeks=clone(col.weeks);c.days=clone(col.days);
   const per={};
-  for(const b of col.blocks){c.items.push({id:uid(),date:b.date,slot:b.slot,dur:b.dur,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:!!imp.asPh});per[b.date]=Math.max(per[b.date]||0,b.slot+b.dur)}
+  for(const b of col.blocks){c.items.push({id:uid(),date:b.date,slot:b.slot,dur:b.dur,short:b.short||0,cat:b.cat,name:b.name,desc:b.desc,libId:link?link(b):null,locked:false,room:b.room,ph:!!imp.asPh});per[b.date]=Math.max(per[b.date]||0,b.slot+b.dur)}
   const ends=[[],[],[],[],[]];for(const d in per)ends[wd(d)].push(per[d]);
   c.dayModules=c.dayModules.map((def,k)=>{const a=ends[k];if(!a.length)return def;const cnt={};a.forEach(v=>cnt[v]=(cnt[v]||0)+1);return +Object.entries(cnt).sort((x,y)=>y[1]-x[1]||y[0]-x[0])[0][0]});
   return c;
@@ -2125,7 +2128,7 @@ function weekText(m){
     if(p){t+=`  ${p.label||PTYPES[p.type]}\n`;continue}
     const list=(bd[d]||[]).slice().sort((a,b)=>a.slot-b.slot);
     if(!list.length){t+='  –\n';continue}
-    for(const i of list){t+=`  ${slotTime(i.slot,i.dur).padEnd(12)} ${i.name}${i.desc?' ('+i.desc.replace(/\s*\n\s*/g,', ')+')':''}\n`;for(const l of goodLinks(i))t+=`${''.padEnd(15)}→ ${linkLabel(l)}: ${safeHref(l.url)}\n`}}
+    for(const i of list){t+=`  ${slotTime(i.slot,i.dur,i.short).padEnd(12)} ${i.name}${i.desc?' ('+i.desc.replace(/\s*\n\s*/g,', ')+')':''}\n`;for(const l of goodLinks(i))t+=`${''.padEnd(15)}→ ${linkLabel(l)}: ${safeHref(l.url)}\n`}}
   return t;
 }
 function copyWeek(m){
@@ -2184,9 +2187,9 @@ function parseCSV(txt){const first=txt.split(/\r?\n/)[0]||'';const d=[';','\t','
 function rowsToLessons(rows){
   let hi=rows.findIndex(r=>r.some(x=>/dato|date/i.test(String(x))));if(hi<0)throw new Error('Fandt ingen kolonne med „Dato“ i filen.');
   const H=rows[hi].map(x=>String(x).toLowerCase());const col=re=>H.findIndex(h=>re.test(h));
-  const cD=col(/dato|date/);let cS=col(/starttid|start\s*tid|start\s*time|tidspunkt|^tid|^fra/);if(cS<0)cS=H.findIndex((h,i)=>i!==cD&&/start|fra|begin/.test(h));const cU=col(/underviser|lærer|teacher/),cT=col(/aktivitet|fag|titel|title|emne|summary|undervisning|beskrivelse|navn/),cR=col(/lokale|location|rum|room|sted/);
+  const cE=col(/sluttid|slut\s*tid|end\s*time|^til/);const cD=col(/dato|date/);let cS=col(/starttid|start\s*tid|start\s*time|tidspunkt|^tid|^fra/);if(cS<0)cS=H.findIndex((h,i)=>i!==cD&&/start|fra|begin/.test(h));const cU=col(/underviser|lærer|teacher/),cT=col(/aktivitet|fag|titel|title|emne|summary|undervisning|beskrivelse|navn/),cR=col(/lokale|location|rum|room|sted/);
   if(cT<0)throw new Error('Fandt ingen kolonne med aktivitet/fag/titel.');
-  return rows.slice(hi+1).map(r=>({date:parseDateCell(r[cD]),start:cS>=0?timeCell(r[cS]):timeCell(r[cD]),title:String(r[cT]||'').trim(),room:cR>=0?String(r[cR]||'').trim():'',teacher:cU>=0?String(r[cU]||'').trim():''})).filter(l=>l.date&&l.start);
+  return rows.slice(hi+1).map(r=>({date:parseDateCell(r[cD]),start:cS>=0?timeCell(r[cS]):timeCell(r[cD]),title:String(r[cT]||'').trim(),room:cR>=0?String(r[cR]||'').trim():'',teacher:cU>=0?String(r[cU]||'').trim():'',end:cE>=0?timeCell(r[cE]):''})).filter(l=>l.date&&l.start);
 }
 function readGenFile(f){
   const r=new FileReader();const name=f.name.toLowerCase();gen.err='';
@@ -2368,7 +2371,7 @@ function exportXLSX(){
   if(!window.XLSX){toast('Excel-modulet er ikke indlæst');return}
   const c=cur();const wb=XLSX.utils.book_new();
   const rows=[['Uge','Forløbsdel','Dato','Ugedag','Modul','Tid','Moduler','Timer','Aktivitet','Beskrivelse','Kategori','Lærer','Lokale','Links']];
-  placed(c).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot).forEach(i=>rows.push([isoWeek(i.date),(c.weeks[monOf(i.date)]||{}).label||'',D(i.date),WD_LONG[wd(i.date)],i.slot+1,slotTime(i.slot,i.dur),i.dur,i.dur*1.5,i.name,i.desc,catOf(i.cat).name,(c.days[i.date]||{}).teacher||'',ROOMS[roomOn(c,i.date)]||'',goodLinks(i).map(l=>linkLabel(l)+': '+safeHref(l.url)).join('\n')]));
+  placed(c).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot).forEach(i=>rows.push([isoWeek(i.date),(c.weeks[monOf(i.date)]||{}).label||'',D(i.date),WD_LONG[wd(i.date)],i.slot+1,slotTime(i.slot,i.dur,i.short),i.dur,i.dur*1.5,i.name,i.desc,catOf(i.cat).name,(c.days[i.date]||{}).teacher||'',ROOMS[roomOn(c,i.date)]||'',goodLinks(i).map(l=>linkLabel(l)+': '+safeHref(l.url)).join('\n')]));
   const ws1=XLSX.utils.aoa_to_sheet(rows,{cellDates:true});ws1['!cols']=[6,14,11,10,7,12,8,7,34,40,12,18,12,50].map(w=>({wch:w}));
   for(let r=1;r<rows.length;r++){const a=XLSX.utils.encode_cell({r,c:2});if(ws1[a])ws1[a].z='dd-mm-yyyy'}
   ws1['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:13}})};
@@ -2450,7 +2453,7 @@ function drawWeekPage(doc,c,m,pi){
   const bd=byDate(c);const M=maxMods(c);const W=297,X0=26,X1=287,colW=(X1-X0)/5,Y0=31,Y1=178,rowHh=(Y1-Y0)/M;
   {
     const w=c.weeks[m]||{};
-    doc.setFillColor(24,29,43);doc.roundedRect(10,9,78,10,2.5,2.5,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(pdfTxt(`${w.label||'Uge'} – uge ${isoWeek(m)}`),14,15.6);
+    doc.setFillColor(24,29,43);doc.roundedRect(10,9,78,10,2.5,2.5,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(pdfTxt(w.label?`${w.label} – uge ${isoWeek(m)}`:`Uge ${isoWeek(m)}`),14,15.6);
     doc.setTextColor(90,96,112);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(pdfTxt(`${c.name} · ${weekRange(m)} ${D(m).getUTCFullYear()}`),X1,13,{align:'right'});if(w.note){doc.setTextColor(168,106,0);doc.text(pdfTxt(w.note),X1,18,{align:'right'})}
     for(let s=0;s<M;s++){const y=Y0+s*rowHh;doc.setTextColor(24,29,43);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text(SLOT_TIMES[s][0],10,y+4);doc.setFont('helvetica','normal');doc.setTextColor(110,116,130);doc.text(SLOT_TIMES[s][1],10,y+8)}
     for(let k=0;k<5;k++){
@@ -2460,7 +2463,7 @@ function drawWeekPage(doc,c,m,pi){
       for(let s=0;s<M;s++){const y=Y0+s*rowHh;if(s>=modulesOn(c,d)||!inRange(c,d)){doc.setFillColor(236,238,242);doc.roundedRect(x+1,y+1,colW-2,rowHh-2,2,2,'F')}else{doc.setDrawColor(214,219,228);doc.setLineWidth(.2);doc.roundedRect(x+1,y+1,colW-2,rowHh-2,2,2,'S')}}
       if(p){const[r,g,b]=hexRGB(periodColor(p));doc.setFillColor(Math.round(r*.35+255*.65),Math.round(g*.35+255*.65),Math.round(b*.35+255*.65));doc.roundedRect(x+1,Y0+1,colW-2,M*rowHh-2,2.5,2.5,'F');doc.setTextColor(24,29,43);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(pdfTxt(p.label||PTYPES[p.type]),x+colW/2,Y0+M*rowHh/2,{align:'center'})}
       const list=(bd[d]||[]).slice().sort((a,b)=>a.slot-b.slot);const lanes=[];const lo={};for(const i of list){let L=lanes.findIndex(e=>e<=i.slot);if(L<0){L=lanes.length;lanes.push(0)}lanes[L]=i.slot+i.dur;lo[i.id]=L}const n=Math.max(1,lanes.length);
-      for(const i of list){const k2=catOf(i.cat);const[r,g,b]=hexRGB(k2.color);const lw=(colW-2)/n;const ix=x+1+lo[i.id]*lw,iy=Y0+i.slot*rowHh+1,iw=lw-(n>1?1:0),ih=Math.min(i.dur,M-i.slot)*rowHh-2;
+      for(const i of list){const k2=catOf(i.cat);const[r,g,b]=hexRGB(k2.color);const lw=(colW-2)/n;const ix=x+1+lo[i.id]*lw,iy=Y0+i.slot*rowHh+1,iw=lw-(n>1?1:0),ih=(Math.min(i.dur,M-i.slot)-(i.short||0)/90)*rowHh-2;
         if(doc.hits)doc.hits.push({id:i.id,x:ix,y:iy,w:iw,h:ih});
         doc.setFillColor(r,g,b);doc.roundedRect(ix,iy,iw,ih,2.5,2.5,'F');const tc=textOn(k2.color)==='#FFFFFF'?255:20;doc.setTextColor(tc,tc,tc);
         let tw=iw-4;const pim=(i.images||[]).map(imgSrc).find(Boolean);let ar=4/3;
