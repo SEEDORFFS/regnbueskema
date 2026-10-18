@@ -115,6 +115,18 @@ textarea{resize:vertical;min-height:64px;width:100%}
 .chip .dot{width:10px;height:10px;border-radius:50%;background:var(--c)}
 .chip[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .lib-list{flex:1;overflow:auto;padding:0 8px 8px;min-height:80px}
+.lib-tabs button{padding:5px 11px;font-size:13px}
+#lib.banktab>.lib-search,#lib.banktab>#lib-cats,#lib.banktab>#lib-list,#lib.banktab>#park,#lib.banktab>.lib-foot,#lib.banktab #lib-new{display:none}
+.bank{flex:1;overflow:auto;padding:0 10px 10px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.bank input[type=search]{width:100%}
+.bank-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.bk{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);padding:5px;display:flex;flex-direction:column;gap:4px;cursor:grab}
+.bk:hover{border-color:var(--accent)}
+.bk img{width:100%;aspect-ratio:1;object-fit:contain;display:block;border-radius:6px;pointer-events:none;background:#eef1f6}
+.bk span{font-size:11.5px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bk .bk-x{position:absolute;top:3px;right:3px;padding:0 5px;line-height:18px;min-height:0;display:none}
+.bk:hover .bk-x{display:block}
+.bank h4{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:4px 2px 0}
 .lib-g-h{width:100%;display:flex;align-items:center;gap:8px;border:0;background:transparent;padding:8px 4px 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .lib-g-h .dot{width:9px;height:9px;border-radius:3px;background:var(--c)}
 .lib-g-h .n{margin-left:auto;font-family:var(--font-mono);letter-spacing:0}
@@ -498,7 +510,8 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
 
   <main class="work">
     <aside class="lib panel" id="lib" aria-label="Aktivitetsbibliotek">
-      <div class="lib-head"><h2>Aktivitetsbibliotek</h2><div class="btnrow"><button class="btn sm" id="lib-new">+ Ny</button><button class="btn sm ghost drawer-x" data-closedrawer="lib" aria-label="Luk biblioteket">✕</button></div></div>
+      <div class="lib-head"><div class="seg lib-tabs" role="tablist"><button data-libtab="acts" aria-pressed="true">Aktiviteter</button><button data-libtab="bank" aria-pressed="false">Billeder</button></div><div class="btnrow"><button class="btn sm" id="lib-new">+ Ny</button><button class="btn sm ghost drawer-x" data-closedrawer="lib" aria-label="Luk biblioteket">✕</button></div></div>
+      <div class="bank" id="bank" hidden></div>
       <div class="lib-search"><input type="search" id="lib-search" placeholder="Søg aktiviteter" aria-label="Søg aktiviteter"></div>
       <div class="chips" id="lib-cats"></div>
       <div class="lib-list" id="lib-list"></div>
@@ -1026,7 +1039,7 @@ function seed(){
   c.weeks={};for(const[k,w]of Object.entries(PPT.weeks||base.weeks||{}))c.weeks[k]={label:w.label||''};
   c.days=base.days?clone(base.days):{};
   c.items=(PPT.items||base.items||[]).map(i=>({id:uid(),date:i.date,slot:i.slot,dur:i.dur,cat:i.cat==='fri'?'studie':i.cat,name:i.name,desc:i.desc||'',libId:(i.libId&&idx['#'+i.libId])||idx[i.name+'|'+i.cat]||null,locked:false,room:i.room||'',ph:!!i.ph,links:clone(i.links||[]),images:(i.images||[]).slice()}));
-  return{v:1,courses:{[c.id]:c},currentId:c.id,library:lib,categories:PPT.categories||defaultCategories(),imgs:Object.assign({},PPT.imgs||{}),savedAt:0};
+  return{v:1,courses:{[c.id]:c},currentId:c.id,library:lib,categories:PPT.categories||defaultCategories(),imgs:{},bank:[],savedAt:0};
 }
 
 const cur=()=>state.courses[state.currentId];
@@ -1065,10 +1078,11 @@ function saveLocal(){
 }
 /* ---- billeder: ligger i en fælles pulje state.imgs {id:dataURL}; blokke og aktiviteter peger på id'er ---- */
 function imgPool(){return state.imgs||(state.imgs={})}
-function imgSrc(id){return(state.imgs&&state.imgs[id])||''}
-function usedImgIds(courses,lib){const u=new Set();for(const c of courses)for(const i of c.items||[])for(const id of i.images||[])u.add(id);for(const l of lib||[])for(const id of l.images||[])u.add(id);return u}
+const BUILTIN_IMGS=(typeof PPT!=='undefined'&&PPT&&PPT.imgs)||{};const BUILTIN_BANK=(typeof PPT!=='undefined'&&PPT&&PPT.bank)||[];
+function imgSrc(id){return(state.imgs&&state.imgs[id])||BUILTIN_IMGS[id]||''}
+function usedImgIds(courses,lib){const u=new Set();for(const b of state.bank||[])u.add(b.id);for(const c of courses)for(const i of c.items||[])for(const id of i.images||[])u.add(id);for(const l of lib||[])for(const id of l.images||[])u.add(id);return u}
 function pickImgs(ids){const o={};for(const id of ids)if(imgSrc(id))o[id]=imgSrc(id);return o}
-function refImgs(){return pickImgs(usedImgIds(Object.values(state.courses||{}),state.library))}
+function refImgs(){const o=pickImgs(usedImgIds(Object.values(state.courses||{}),state.library));for(const k in o)if(BUILTIN_IMGS[k]===o[k])delete o[k];return o}/* indbyggede billeder ligger i selve appen og gemmes ikke igen */
 function stateForSave(){const o=Object.assign({},state,{imgs:refImgs()});delete o.imgsMissing;if(state.imgsMissing)o.imgsMissing=true;return o}
 function loadLocal(){try{const s=localStorage.getItem(LS_KEY);if(s){const o=JSON.parse(s);if(o&&o.courses&&o.library)return o}}catch(e){}return null}
 function scheduleSave(){
@@ -1167,7 +1181,39 @@ function renderHeader(){
 }
 
 function libUses(c){const m={};for(const i of c.items)if(i.libId)m[i.libId]=(m[i.libId]||0)+1;return m}
-function renderLibrary(){
+/* ---------- billedbank ---------- */
+const bankUI={tab:'acts',q:''};
+function bankEntries(){const seen=new Set();const out=[];
+  for(const b of BUILTIN_BANK)if(BUILTIN_IMGS[b.id]&&!seen.has(b.id)&&!(state.bankHidden||[]).includes(b.id)){seen.add(b.id);out.push({id:b.id,name:b.name,kind:'std'})}
+  for(const b of state.bank||[])if(imgSrc(b.id)&&!seen.has(b.id)){seen.add(b.id);out.push({id:b.id,name:b.name,kind:'mine'})}
+  const used=[];const name={};for(const l of state.library)for(const id of l.images||[])if(!name[id])name[id]=l.name;for(const c of Object.values(state.courses))for(const i of c.items)for(const id of i.images||[])if(!name[id])name[id]=i.name;
+  for(const id of Object.keys(name))if(imgSrc(id)&&!seen.has(id)){seen.add(id);used.push({id,name:name[id],kind:'used'})}
+  return out.concat(used)}
+function renderBank(){const el=$('bank');if(!el)return;$('lib').classList.toggle('banktab',bankUI.tab==='bank');el.hidden=bankUI.tab!=='bank';
+  document.querySelectorAll('[data-libtab]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.libtab===bankUI.tab));if(bankUI.tab!=='bank')return;
+  const q=bankUI.q.trim().toLowerCase();const E=bankEntries().filter(e=>!q||e.name.toLowerCase().includes(q));
+  const card=e=>`<div class="bk" draggable="true" data-bankimg="${e.id}" title="${esc(e.name)} – træk ind på en blok eller aktivitet"><img class="${/^data:image\/png/.test(imgSrc(e.id))?'tp':''}" src="${imgSrc(e.id)}" alt=""><span>${esc(e.name)}</span>${e.kind!=='used'?`<button class="btn sm bk-x" data-bankdel="${e.id}" aria-label="Fjern fra billedbanken">✕</button>`:''}</div>`;
+  const grp=(t,L)=>L.length?`<h4>${t}</h4><div class="bank-grid">${L.map(card).join('')}</div>`:'';
+  const has=bankEntries().length;
+  el.innerHTML=`<input type="search" id="bank-q" placeholder="Søg i billeder" value="${esc(bankUI.q)}" aria-label="Søg i billeder">
+   <div class="small muted">Træk et billede ind på en blok i skemaet eller en aktivitet i biblioteket. Eller vælg en blok og klik på billedet.</div>
+   ${grp('Standardbilleder',E.filter(e=>e.kind==='std'))}${grp('Mine billeder',E.filter(e=>e.kind==='mine'))}${grp('Brugt i skemaer og aktiviteter',E.filter(e=>e.kind==='used'))}
+   ${has&&!E.length?'<div class="small muted">Ingen billeder passer til søgningen.</div>':''}${!has?'<div class="guide small">Billedbanken er tom endnu. Tilføj billeder her, så kan de genbruges på alle blokke og aktiviteter.</div>':''}
+   <div class="btnrow"><button class="btn sm" data-bankadd>+ Tilføj billeder til banken</button></div>`;
+  const qi=$('bank-q');if(qi&&document.activeElement&&document.activeElement.id==='bank-q'){}}
+function attachImg(target,id){if(!target)return false;target.images=target.images||[];if(target.images.includes(id)){toast('Billedet sidder der allerede');return false}mutate(()=>{target.images.push(id)});toast('Billedet er sat på „'+target.name+'“');return true}
+document.addEventListener('click',e=>{const t=e.target;let b;
+  if(b=t.closest('[data-libtab]')){bankUI.tab=b.dataset.libtab;renderBank();return}
+  if(b=t.closest('[data-bankdel]')){const id=b.dataset.bankdel;const prevB=clone(state.bank||[]),prevH=clone(state.bankHidden||[]);if(BUILTIN_BANK.some(x=>x.id===id))state.bankHidden=prevH.concat([id]);else state.bank=prevB.filter(x=>x.id!==id);scheduleSave();renderBank();toast('Fjernet fra billedbanken','Fortryd',()=>{state.bank=prevB;state.bankHidden=prevH;scheduleSave();renderBank()});return}
+  if(b=t.closest('[data-bankadd]')){if(!imgCanAdd()){toast('Nye billeder kræver, at du har valgt „Gem automatisk i en fil“');return}imgWho='bank';$('img-in').click();return}
+  if(b=t.closest('[data-bankimg]')){const s2=ui.sel;const c=cur();const tgt=s2&&s2.type==='item'?c.items.find(x=>x.id===s2.id):s2&&s2.type==='lib'?libOf(s2.id):null;if(!tgt){toast('Vælg først en blok eller aktivitet – eller træk billedet derhen');return}attachImg(tgt,b.dataset.bankimg);return}
+});
+document.addEventListener('input',e=>{if(e.target.id!=='bank-q')return;bankUI.q=e.target.value;const pos=e.target.selectionStart;renderBank();const q=$('bank-q');if(q){q.focus();try{q.setSelectionRange(pos,pos)}catch(_){}}});
+document.addEventListener('dragstart',e=>{const b=e.target.closest&&e.target.closest('[data-bankimg]');if(!b)return;e.dataTransfer.setData('text/x-rbimg',b.dataset.bankimg);e.dataTransfer.effectAllowed='copy'});
+async function addToBank(files){files=[...(files||[])].filter(f=>/^image\//.test(f.type));if(!files.length){toast('Vælg en billedfil, fx JPG eller PNG');return}const add=[];let bad=0;
+  for(const f of files){try{const src=await compressImage(f);const id='im'+uid();imgPool()[id]=src;add.push({id,name:f.name.replace(/\.[a-z0-9]+$/i,'').replace(/[_-]+/g,' ').trim()||'Billede'})}catch(e){bad++}}
+  if(!add.length){toast('Billedet kunne ikke læses');return}store.imgDirty=true;state.bank=(state.bank||[]).concat(add);scheduleSave();bankUI.tab='bank';renderBank();toast(`${add.length} billede${add.length>1?'r':''} lagt i billedbanken`+(bad?` (${bad} kunne ikke læses)`:''))}
+function renderLibrary(){renderBank();
   const c=cur();const uses=libUses(c);
   $('lib-cats').innerHTML=state.categories.map(k=>`<button class="chip" data-libcat="${k.id}" aria-pressed="${ui.cats.has(k.id)}" style="--c:${k.color}"><span class="dot"></span>${esc(k.name)}</button>`).join('');
   const q=ui.q.trim().toLowerCase();
@@ -2358,10 +2404,10 @@ async function offer(filename,data){
 }
 function exportPack(){
   const c=clone(cur());c.overrides={};
-  const st={v:1,courses:{[c.id]:c},currentId:c.id,library:state.library,categories:state.categories,imgs:pickImgs(usedImgIds([c],state.library)),savedAt:0};
+  const st={v:1,courses:{[c.id]:c},currentId:c.id,library:state.library,categories:state.categories,bank:clone(state.bank||[]),imgs:pickImgs(usedImgIds([c],state.library)),savedAt:0};
   offer('GF2_standardpakke.json',JSON.stringify({app:'regnbueskema',kind:'workspace',version:1,pack:true,exported:new Date().toISOString(),state:st}));
 }
-function mergeWorkspace(st){const n=Object.keys(st.courses).length;for(const c of Object.values(st.courses))importProject({app:'regnbueskema',course:c,library:st.library,categories:st.categories,imgs:st.imgs});toast(n>1?`${n} forløb er importeret`:'Forløbet er importeret')}
+function mergeWorkspace(st){if(st.bank&&st.bank.length){const P=imgPool();for(const b of st.bank)if(st.imgs&&st.imgs[b.id]&&!P[b.id])P[b.id]=st.imgs[b.id];const have=new Set((state.bank||[]).map(x=>x.id));state.bank=(state.bank||[]).concat(st.bank.filter(b=>!have.has(b.id)))}const n=Object.keys(st.courses).length;for(const c of Object.values(st.courses))importProject({app:'regnbueskema',course:c,library:st.library,categories:st.categories,imgs:st.imgs});toast(n>1?`${n} forløb er importeret`:'Forløbet er importeret')}
 let wantReplace=false;
 function exportJSON(){const c=cur();const usedLib=state.library;offer(fileBase()+'.regnbueskema.json',JSON.stringify({app:'regnbueskema',version:1,exported:new Date().toISOString(),course:c,library:usedLib,categories:state.categories,imgs:pickImgs(usedImgIds([c],usedLib))},null,1))}
 $('file-in').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';const rp=wantReplace;wantReplace=false;if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(o&&o.kind==='workspace'&&o.state&&o.state.courses){if(rp){loadWorkspace(o.state);toast(`${f.name} er åbnet`)}else mergeWorkspace(o.state)}else importProject(o)}catch(err){toast('Filen kunne ikke læses som en projektfil')}};r.readAsText(f)});
@@ -2632,18 +2678,21 @@ async function addImages(who,files){
   toast((ids.length>1?ids.length+' billeder er tilføjet':'Billedet er tilføjet')+(bad?` (${bad} kunne ikke læses)`:''));
 }
 function showImage(id,cap){const src=imgSrc(id);if(!src)return;openModal(`<div class="modal-h"><div><h2>${esc(cap||'Billede')}</h2></div><button type="button" class="btn ghost icon" data-close aria-label="Luk">✕</button></div><div class="modal-b"><div class="lightbox"><img src="${src}" alt="${esc(cap||'Billede')}"></div></div><div class="modal-f"><span></span><button class="btn primary" data-close>Luk</button></div>`);$('modal-body').closest('.modal').classList.add('wide')}
-$('img-in').addEventListener('change',e=>{const f=[...e.target.files];e.target.value='';if(imgWho)addImages(imgWho,f)});
+$('img-in').addEventListener('change',e=>{const f=[...e.target.files];e.target.value='';if(imgWho==='bank')addToBank(f);else if(imgWho)addImages(imgWho,f)});
 rb.addEventListener('dragover',e=>{const z=e.target.closest('[data-imgdrop]');if(!z||!e.dataTransfer||![...e.dataTransfer.types].includes('Files'))return;e.preventDefault();z.classList.add('over')});
 rb.addEventListener('dragleave',e=>{const z=e.target.closest('[data-imgdrop]');if(z)z.classList.remove('over')});
 rb.addEventListener('drop',e=>{const z=e.target.closest('[data-imgdrop]');if(!z)return;e.preventDefault();z.classList.remove('over');addImages(z.dataset.imgdrop,e.dataTransfer.files)});
 /* træk en billedfil fra computeren direkte ind på en blok i skemaet eller en aktivitet i biblioteket */
-const hasFiles=e=>e.dataTransfer&&[...e.dataTransfer.types].includes('Files');
+const hasFiles=e=>e.dataTransfer&&([...e.dataTransfer.types].includes('Files')||[...e.dataTransfer.types].includes('text/x-rbimg'));
 let imgOver=null;const setImgOver=el=>{if(imgOver&&imgOver!==el)imgOver.classList.remove('imgover');imgOver=el;if(el)el.classList.add('imgover')};
 document.addEventListener('dragover',e=>{if(!hasFiles(e))return;e.preventDefault();const t=e.target.closest&&e.target.closest('.it[data-id],.lib-it[data-id]');
-  if(e.target.closest&&e.target.closest('[data-imgdrop],#modal'))return;e.dataTransfer.dropEffect=t?'copy':'none';setImgOver(t)});
+  if(e.target.closest&&e.target.closest('[data-imgdrop],#modal'))return;const inBank=e.target.closest&&e.target.closest('#bank')&&[...e.dataTransfer.types].includes('Files');e.dataTransfer.dropEffect=t||inBank?'copy':'none';setImgOver(t)});
 document.addEventListener('dragleave',e=>{if(!hasFiles(e))return;if(!e.relatedTarget)setImgOver(null)});
-document.addEventListener('drop',e=>{if(!hasFiles(e))return;if(e.target.closest&&e.target.closest('[data-imgdrop],#modal'))return;e.preventDefault();setImgOver(null);
-  const t=e.target.closest&&e.target.closest('.it[data-id],.lib-it[data-id]');if(!t)return;
+document.addEventListener('drop',e=>{if(!hasFiles(e))return;if(e.target.closest&&e.target.closest('#bank')&&e.dataTransfer.files.length){e.preventDefault();setImgOver(null);if(!imgCanAdd()){toast('Nye billeder kræver, at du har valgt „Gem automatisk i en fil“');return}addToBank(e.dataTransfer.files);return}if(e.target.closest&&e.target.closest('[data-imgdrop],#modal'))return;e.preventDefault();setImgOver(null);
+  const t=e.target.closest&&e.target.closest('.it[data-id],.lib-it[data-id]');
+  const bid=e.dataTransfer.getData('text/x-rbimg');
+  if(bid){if(!t)return;const lib=t.classList.contains('lib-it');const o=lib?libOf(t.dataset.id):cur().items.find(x=>x.id===t.dataset.id);ui.sel={type:lib?'lib':'item',id:t.dataset.id};ui.tab='detail';attachImg(o,bid);return}
+  if(!t)return;
   const files=[...e.dataTransfer.files].filter(f=>/^image\//.test(f.type));if(!files.length){toast('Det er ikke en billedfil – brug fx JPG eller PNG');return}
   const lib=t.classList.contains('lib-it');ui.sel={type:lib?'lib':'item',id:t.dataset.id};ui.tab='detail';openRightIfDrawer();renderAll();addImages(lib?'lib':'item',files)});
 document.addEventListener('paste',e=>{const s=ui.sel;if(!s||(s.type!=='item'&&s.type!=='lib')||ui.tab!=='detail')return;const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type));if(!fs.length)return;e.preventDefault();addImages(s.type==='lib'?'lib':'item',fs)});
