@@ -167,6 +167,7 @@ textarea{resize:vertical;min-height:64px;width:100%}
 .qbox input{width:170px;padding:5px 9px;font-size:13px}
 .qbox .btn.icon.sm{min-width:26px;padding:2px 6px}
 .sched.searching .it:not(.hit){opacity:.16;filter:saturate(.4)}
+.sched .it.libhit{outline:3px solid var(--fg);outline-offset:2px;z-index:3}
 .sched.searching .it.hit{box-shadow:0 0 0 2.5px var(--fg),0 4px 12px rgba(0,0,0,.25);z-index:3}
 .sched.v-print{min-width:0;padding:12px 16px 28px}
 .printwrap{max-width:1180px;margin:0 auto;display:grid;gap:8px}
@@ -413,7 +414,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
 .tidy-table .tu{font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:right}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:120;background:var(--fg);color:var(--bg);border-radius:10px;padding:9px 12px 9px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3);font-size:13.5px;max-width:calc(100vw - 32px)}
 .toast button{border:0;background:transparent;color:inherit;font-weight:700;text-decoration:underline}
-.armed-bar{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:60;background:var(--accent);color:var(--accent-fg);border-radius:999px;padding:7px 8px 7px 16px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);font-size:13.5px;max-width:calc(100vw - 32px)}
+.armed-bar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:60;background:var(--accent);color:var(--accent-fg);border-radius:999px;padding:7px 8px 7px 16px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);font-size:13.5px;max-width:calc(100vw - 32px)}
 .armed-bar button{border:0;border-radius:999px;background:rgba(255,255,255,.2);color:inherit;padding:3px 10px;font-weight:700}
 
 .tour-catch{position:fixed;inset:0;z-index:109}
@@ -1308,7 +1309,7 @@ function renderSchedule(){
       const compact=ui.view==='week'&&i.dur<2;
       const nImg=(i.images||[]).length;const thumbs=ui.view!=='overview'&&nImg&&!compact;
       const showDesc=i.desc&&ht>=40&&!compact;
-      h+=`<div class="it ${thumbs?'hasth':''} ${(ui.sq||'').trim()&&itemHit(c,i)?'hit':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur,itemShort(cur(),i)))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
+      h+=`<div class="it ${thumbs?'hasth':''} ${(ui.sq||'').trim()&&itemHit(c,i)?'hit':''} ${ui.sel&&ui.sel.type==='lib'&&i.libId===ui.sel.id?'libhit':''} ${i.ph?'ph':''} ${sel?'sel':''} ${i.locked?'locked':''} ${ui.popId===i.id?'pop':''}" data-drag="item" data-id="${i.id}" tabindex="0" title="${esc(i.name+(i.desc?'\n'+i.desc:'')+'\n'+slotTime(i.slot,i.dur,itemShort(cur(),i)))}" style="top:${top}px;height:${ht}px;left:calc(${L*100/n}% + 2px);width:calc(${100/n}% - 4px);--c:${k.color};--t:${textOn(k.color)}">`
         +`<span class="n">${esc(i.name)}</span>${ui.view!=='overview'&&goodLinks(i).length&&ht>=56?`<span class="ilinks">${goodLinks(i).map(l=>`<a href="${esc(safeHref(l.url))}" target="_blank" rel="noopener" title="${esc(safeHref(l.url))}">${ICON.link}${esc(linkLabel(l))}</a>`).join('')}</span>`:''}${showDesc?`<span class="ds">${esc(i.desc)}</span>`:''}${thumbs?blockThumbs(i):''}`
         +`<span class="bd">${warnItems.has(i.id)?`<span class="w" title="Se advarsler">${ICON.warn}</span>`:''}${goodLinks(i).length?`<span class="lk2" title="${goodLinks(i).length} link${goodLinks(i).length>1?'s':''}">${ICON.link}</span>`:''}${nImg?`<span class="im2" title="${nImg} billede${nImg>1?'r':''}">${ICON.img}</span>`:''}${i.locked?ICON.lock:''}</span><span class="rs-h" aria-hidden="true"></span></div>`;
     }
@@ -1407,7 +1408,8 @@ function detailHTML(c){
   if(s.type==='lib'){
     const l=libOf(s.id);if(!l){ui.sel=null;return detailHTML(c)}const k=catOf(l.cat);const used=c.items.filter(i=>i.libId===l.id).length;
     return `<div class="det-head" style="--c:${k.color};--t:${textOn(k.color)}"><span class="k">Bibliotek · ${esc(k.name)}</span><span class="tt">${esc(l.name)}</span><span class="wh">${l.dur} modul${l.dur>1?'er':''} · brugt ${used}× i dette forløb</span></div>
-    <div class="btnrow"><button class="btn sm primary" data-arm="${l.id}">${ui.armed===l.id?'Annullér placering':'Placér i skemaet'}</button></div>
+    <div class="btnrow"><button class="btn sm primary" data-arm="${l.id}">${ui.armed===l.id?'Annullér placering':'Placér i skemaet'}</button>${libPlaced(l.id).length?`<button class="btn sm" data-libshow="${l.id}" title="Gå til næste sted, hvor aktiviteten ligger i skemaet">Vis i skemaet${libPlaced(l.id).length>1?` (${ui.lsi>=0&&ui.lsiFor===l.id?ui.lsi+1+' af ':''}${libPlaced(l.id).length})`:''} ›</button>`:''}</div>
+    ${libPlaced(l.id).length?`<p class="small muted">Blokke i skemaet er kopier – ændringer her slår ikke igennem på dem, der allerede er placeret.</p>`:''}
     <div class="fld"><label for="l-name">Navn</label><input type="text" id="l-name" data-lf="name" value="${esc(l.name)}"></div>
     <div class="fld"><label for="l-desc">Beskrivelse</label><textarea id="l-desc" data-lf="desc">${esc(l.desc)}</textarea></div>
     ${linksEditor(l,'lib')}${imagesEditor(l,'lib')}<div class="small muted">Links og billeder på aktiviteten følger med, når den sættes i skemaet.</div>
@@ -1446,6 +1448,15 @@ function selectItem(id,tab=true){ui.sel={type:'item',id};if(tab)ui.tab='detail';
 function select(type,id){ui.sel={type,id};ui.tab='detail';openRightIfDrawer();renderAll()}
 function openRightIfDrawer(){if(matchMedia('(max-width:1240px)').matches)$('right').classList.add('open')}
 function weekLocked(c,d){return !!(d&&(c.weeks[monOf(d)]||{}).locked)}
+function libPlaced(id){return cur().items.filter(i=>i.libId===id&&i.date).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot)}
+function showLibPlace(id,step){const P=libPlaced(id);if(!P.length)return;if(ui.lsiFor!==id){ui.lsiFor=id;ui.lsi=-1}ui.lsi=step?(ui.lsi+1)%P.length:Math.max(0,ui.lsi);const i=P[ui.lsi];
+  ui.weekMon=monOf(i.date);ui.focusDate=i.date;
+  renderAll();requestAnimationFrame(()=>{const el=document.querySelector(`.it[data-id="${i.id}"]`);if(el)el.scrollIntoView({block:'center',behavior:'smooth'})})}
+function libReveal(id){if(ui.revealFor===id)return;ui.revealFor=id;const P=libPlaced(id);if(!P.length)return;
+  const vis=document.querySelector('.it.libhit');if(vis){vis.scrollIntoView({block:'nearest',behavior:'smooth'});return}
+  if(ui.print&&P.some(i=>monOf(i.date)===ui.weekMon)){printScrollTo(P.find(i=>monOf(i.date)===ui.weekMon).id);return}
+  if(ui.view!=='overview'){ui.weekMon=monOf(P[0].date);ui.focusDate=P[0].date;renderSchedule()}
+  requestAnimationFrame(()=>{const el=document.querySelector('.it.libhit');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});else if(ui.print){const f=libPlaced(id).find(i=>monOf(i.date)===ui.weekMon);if(f)printScrollTo(f.id)}})}
 function goToItem(id){const c=cur();const i=c.items.find(x=>x.id===id);if(!i)return;if(i.date&&ui.view!=='overview'){ui.weekMon=monOf(i.date);ui.focusDate=i.date}ui.sel={type:'item',id};ui.tab='detail';renderAll();requestAnimationFrame(()=>{const el=document.querySelector(`.it[data-id="${id}"]`);if(el)el.scrollIntoView({block:'center',behavior:'smooth'})})}
 function placeLib(libId,date,slot){
   const c=cur();const l=libOf(libId);if(!l)return;
@@ -1570,6 +1581,7 @@ document.addEventListener('click',e=>{
   if(b=t.closest('[data-addlink]')){const o=linkTarget(b.dataset.addlink);if(!o)return;mutate(()=>{o.links=(o.links||[]).concat([{label:'',url:''}])});setTimeout(()=>{const r=[...document.querySelectorAll('#right-body .lrow')].pop();if(r)r.querySelector('[data-lk=url]').focus()},0);return}
   if(b=t.closest('[data-rmlink]')){const o=linkTarget(b.dataset.who);if(!o||!o.links)return;const k=+b.dataset.rmlink;mutate(()=>{o.links.splice(k,1)});return}
   if(t.closest('.ilinks a')){return}
+  if(b=t.closest('[data-libshow]')){showLibPlace(b.dataset.libshow,true);return}
   if(b=t.closest('[data-qnav]')){qGo(+b.dataset.qnav);return}
   if(b=t.closest('[data-imgview]')){e.stopPropagation();showImage(b.dataset.imgview,b.dataset.cap||'');return}
   if(b=t.closest('[data-addimg]')){imgWho=b.dataset.addimg;$('img-in').click();return}
@@ -1602,7 +1614,7 @@ document.addEventListener('click',e=>{
   if(b=t.closest('.pk')){selectItem(b.dataset.id);return}
   if(b=t.closest('.day-h')){select('day',b.dataset.day);return}
   if(b=t.closest('.wk-tag')){select('week',b.dataset.week);return}
-  if(b=t.closest('.lib-it')){const id=b.dataset.id;ui.sel={type:'lib',id};ui.tab='detail';arm(ui.armed===id?null:id);return}
+  if(b=t.closest('.lib-it')){const id=b.dataset.id;ui.sel={type:'lib',id};ui.tab='detail';ui.lsiFor=null;ui.revealFor=null;arm(ui.armed===id?null:id);requestAnimationFrame(()=>{const el=document.querySelector('.it.libhit');if(el)el.scrollIntoView({block:'nearest',behavior:'smooth'})});return}
   if(b=t.closest('.day-b')){
     if(ui.armed){const r=b.getBoundingClientRect();const s=Math.max(0,Math.min(maxMods(c)-1,Math.floor((e.clientY-r.top)/rowH())));const id=ui.armed;placeLib(id,b.dataset.date,s);return}
     if(ui.sel){ui.sel=null;renderSchedule();renderRight()}return}
@@ -1639,6 +1651,7 @@ function setView(v){
 let editing=false;
 const rb=$('right-body');
 rb.addEventListener('focusin',e=>{if(e.target.matches('[data-f],[data-lf],[data-df],[data-wf],[data-lk]')&&!editing){editing=true;pushUndo()}});
+rb.addEventListener('focusin',e=>{if(e.target.matches('[data-lf],[data-lk]')&&ui.sel&&ui.sel.type==='lib')libReveal(ui.sel.id)});
 rb.addEventListener('focusout',e=>{if(e.target.matches('[data-f],[data-lf],[data-df],[data-wf],[data-lk]')){editing=false;renderHeader()}});
 rb.addEventListener('input',e=>applyField(e.target,false));
 rb.addEventListener('change',e=>applyField(e.target,true));
@@ -2479,7 +2492,14 @@ function drawPrint(){
   const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,cssW,210*k);
   const doc=canvasDoc(ctx,k);drawWeekPage(doc,c,m,0);
   printHits=doc.hits;
-  if(ui.sel&&ui.sel.type==='item'){const h=printHits.find(x=>x.id===ui.sel.id);if(h){ctx.strokeStyle='#181D2B';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect?ctx.roundRect(h.x*k-2,h.y*k-2,h.w*k+4,h.h*k+4,2.5*k+2):ctx.rect(h.x*k-2,h.y*k-2,h.w*k+4,h.h*k+4);ctx.stroke()}}
+  const ring=h=>{ctx.strokeStyle='#181D2B';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect?ctx.roundRect(h.x*k-2,h.y*k-2,h.w*k+4,h.h*k+4,2.5*k+2):ctx.rect(h.x*k-2,h.y*k-2,h.w*k+4,h.h*k+4);ctx.stroke()};
+  if(ui.sel&&ui.sel.type==='item'){const h=printHits.find(x=>x.id===ui.sel.id);if(h)ring(h)}
+  if(ui.sel&&ui.sel.type==='lib'){const ids=new Set(c.items.filter(i=>i.libId===ui.sel.id).map(i=>i.id));printHits.filter(h=>ids.has(h.id)).forEach(ring)}
+}
+function printScrollTo(id){const cv=$('printcv');if(!cv||!cv.offsetParent)return;const h=printHits.find(x=>x.id===id);if(!h)return;const k=cv.clientWidth/297;
+  let sp=cv.parentElement;while(sp&&!(sp.scrollHeight>sp.clientHeight&&/(auto|scroll)/.test(getComputedStyle(sp).overflowY)))sp=sp.parentElement;if(!sp)return;
+  const r=cv.getBoundingClientRect(),pr=sp.getBoundingClientRect();const top=r.top-pr.top+sp.scrollTop+h.y*k,bot=top+h.h*k;
+  if(top<sp.scrollTop||bot>sp.scrollTop+sp.clientHeight)sp.scrollTo({top:Math.max(0,top-Math.max(20,(sp.clientHeight-h.h*k)/2)),behavior:'smooth'})
 }
 function printHitAt(e){const cv=$('printcv');if(!cv)return null;const r=cv.getBoundingClientRect();const k=r.width/297;const x=(e.clientX-r.left)/k,y=(e.clientY-r.top)/k;for(let j=printHits.length-1;j>=0;j--){const h=printHits[j];if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h)return h}return null}
 document.addEventListener('click',e=>{if(e.target.id!=='printcv')return;const h=printHitAt(e);if(h)selectItem(h.id)});
