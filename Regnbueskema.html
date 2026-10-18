@@ -64,6 +64,9 @@ textarea{resize:vertical;min-height:64px;width:100%}
 .seg button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
 .tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .zoomv{font-family:var(--font-mono);font-size:12px;width:44px;text-align:center;color:var(--muted)}
+.proto{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#5A3A00;background:#FFD54A;border-radius:999px;padding:4px 11px;text-decoration:none;white-space:nowrap;box-shadow:0 1px 0 rgba(0,0,0,.15)}
+.proto:hover{background:#FFC61A}
+.proto::before{content:'';width:7px;height:7px;border-radius:50%;background:#E5484D}
 .save{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:340px;overflow:hidden;text-overflow:ellipsis}
 .save::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok)}
 .save[data-s=saving]::before{background:var(--warn)}
@@ -289,6 +292,7 @@ textarea{resize:vertical;min-height:64px;width:100%}
 .imgs .imc{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel-2);aspect-ratio:4/3}
 .imgs .imc img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
 .imgs .imc .imiss{display:grid;place-items:center;height:100%;font-size:11px;text-align:center;padding:4px;color:var(--muted)}
+.imgs .imc .tobank{right:auto;left:3px}
 .imgs .imc button{position:absolute;top:3px;right:3px;padding:0 6px;line-height:20px;min-height:0}
 .imgdrop{border:1.5px dashed var(--line-2);border-radius:10px;padding:8px;display:grid;gap:6px}
 .imgdrop.over{border-color:var(--accent);background:var(--accent-soft)}
@@ -503,6 +507,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
       </div>
       <button class="btn icon ghost" id="btn-help" title="Rundvisning" aria-label="Start rundvisning">?</button>
       <span class="save" id="save-status" data-s="local">Gemt i browseren</span>
+      <a class="proto" href="mailto:sse@nextkbh.dk?subject=Feedback%20p%C3%A5%20Regnbueskemaet" title="Skriv en mail med feedback">Prototype · Feedback til sse@nextkbh.dk</a>
       <button class="btn only-narrow" id="tg-lib">Bibliotek</button>
       <button class="btn only-mid" id="tg-right">Overblik</button>
     </div>
@@ -1201,10 +1206,12 @@ function renderBank(){const el=$('bank');if(!el)return;$('lib').classList.toggle
    ${has&&!E.length?'<div class="small muted">Ingen billeder passer til søgningen.</div>':''}${!has?'<div class="guide small">Billedbanken er tom endnu. Tilføj billeder her, så kan de genbruges på alle blokke og aktiviteter.</div>':''}
    <div class="btnrow"><button class="btn sm" data-bankadd>+ Tilføj billeder til banken</button></div>`;
   const qi=$('bank-q');if(qi&&document.activeElement&&document.activeElement.id==='bank-q'){}}
+function inBank(id){return(state.bank||[]).some(b=>b.id===id)||(BUILTIN_BANK.some(b=>b.id===id)&&!(state.bankHidden||[]).includes(id))}
 function attachImg(target,id){if(!target)return false;target.images=target.images||[];if(target.images.includes(id)){toast('Billedet sidder der allerede');return false}mutate(()=>{target.images.push(id)});toast('Billedet er sat på „'+target.name+'“');return true}
 document.addEventListener('click',e=>{const t=e.target;let b;
   if(b=t.closest('[data-libtab]')){bankUI.tab=b.dataset.libtab;renderBank();return}
   if(b=t.closest('[data-bankdel]')){const id=b.dataset.bankdel;const prevB=clone(state.bank||[]),prevH=clone(state.bankHidden||[]);if(BUILTIN_BANK.some(x=>x.id===id))state.bankHidden=prevH.concat([id]);else state.bank=prevB.filter(x=>x.id!==id);scheduleSave();renderBank();toast('Fjernet fra billedbanken','Fortryd',()=>{state.bank=prevB;state.bankHidden=prevH;scheduleSave();renderBank()});return}
+  if(b=t.closest('[data-tobank]')){const id=b.dataset.tobank;if(BUILTIN_BANK.some(x=>x.id===id))state.bankHidden=(state.bankHidden||[]).filter(x=>x!==id);else state.bank=(state.bank||[]).concat([{id,name:b.dataset.name||'Billede'}]);scheduleSave();renderBank();renderRight();toast('Gemt i billedbanken under „Mine billeder“');return}
   if(b=t.closest('[data-bankadd]')){if(!imgCanAdd()){toast('Nye billeder kræver, at du har valgt „Gem automatisk i en fil“');return}imgWho='bank';$('img-in').click();return}
   if(b=t.closest('[data-bankimg]')){const s2=ui.sel;const c=cur();const tgt=s2&&s2.type==='item'?c.items.find(x=>x.id===s2.id):s2&&s2.type==='lib'?libOf(s2.id):null;if(!tgt){toast('Vælg først en blok eller aktivitet – eller træk billedet derhen');return}attachImg(tgt,b.dataset.bankimg);return}
 });
@@ -2663,7 +2670,7 @@ function imagesEditor(o,who){const L=o.images||[];const can=imgCanAdd();
   else if(pendingHandle)add=`<div class="guide small">${esc(info)}<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" data-imgconnect>Fortsæt i ${esc(pendingHandle.name)}</button></div></div>`;
   else if(fsOK)add=`<div class="guide small">${esc(info)}<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" data-imgconnect>Gem automatisk i en fil…</button></div></div>`;
   else add=`<div class="guide small">${esc(info)} Det kan kun lade sig gøre i Chrome eller Edge.</div>`;
-  return`<div class="fld"><span class="lbl-s">Billeder <span class="muted" style="font-weight:400">– fx tegninger eller fotos af emner</span></span><div class="imgdrop" data-imgdrop="${who}">${L.length?`<div class="imgs">${L.map((id,k)=>`<div class="imc">${imgSrc(id)?`<img class="${/^data:image\/png/.test(imgSrc(id))?'tp':''}" src="${imgSrc(id)}" alt="Billede ${k+1}" data-imgview="${id}" data-cap="${esc(o.name)}">`:`<span class="imiss">Billedet ligger i arbejdsfilen</span>`}<button class="btn sm" data-rmimg="${k}" data-who="${who}" aria-label="Fjern billede">✕</button></div>`).join('')}</div>`:''}${add}</div></div>`}
+  return`<div class="fld"><span class="lbl-s">Billeder <span class="muted" style="font-weight:400">– fx tegninger eller fotos af emner</span></span><div class="imgdrop" data-imgdrop="${who}">${L.length?`<div class="imgs">${L.map((id,k)=>`<div class="imc">${imgSrc(id)?`<img class="${/^data:image\/png/.test(imgSrc(id))?'tp':''}" src="${imgSrc(id)}" alt="Billede ${k+1}" data-imgview="${id}" data-cap="${esc(o.name)}">`:`<span class="imiss">Billedet ligger i arbejdsfilen</span>`}<button class="btn sm" data-rmimg="${k}" data-who="${who}" aria-label="Fjern billede">✕</button>${imgSrc(id)&&!inBank(id)?`<button class="btn sm tobank" data-tobank="${id}" data-name="${esc(o.name)}" title="Gem i billedbanken, så det kan genbruges">☆</button>`:''}</div>`).join('')}</div>`:''}${add}</div></div>`}
 function compressImage(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const im=new Image();
   im.onload=()=>{let w=im.naturalWidth,h=im.naturalHeight;if(!w||!h){URL.revokeObjectURL(u);rej(new Error('size'));return}const f=Math.min(1,IMG_MAX/Math.max(w,h));w=Math.max(1,Math.round(w*f));h=Math.max(1,Math.round(h*f));const cv=document.createElement('canvas');cv.width=w;cv.height=h;const g=cv.getContext('2d');g.drawImage(im,0,0,w,h);URL.revokeObjectURL(u);let tp=false;try{const a=g.getImageData(0,0,w,h).data;for(let q=3;q<a.length;q+=16)if(a[q]<245){tp=true;break}}catch(e){}if(tp){res(cv.toDataURL('image/png'));return}g.globalCompositeOperation='destination-over';g.fillStyle='#fff';g.fillRect(0,0,w,h);res(cv.toDataURL('image/jpeg',IMG_Q))};
   im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('load'))};im.src=u})}
