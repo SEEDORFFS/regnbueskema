@@ -266,6 +266,8 @@ textarea{resize:vertical;min-height:64px;width:100%}
 .iimgs img,.iimgs .imiss{height:100%;max-height:96px;border-radius:5px;object-fit:cover;display:block;box-shadow:0 0 0 1.5px rgba(0,0,0,.18);cursor:zoom-in;background:rgba(255,255,255,.5);aspect-ratio:4/3;width:auto;min-width:0}
 .iimgs .imiss{display:grid;place-items:center;font-size:10px;cursor:default}
 .it.hasth .bd .im2{display:none}
+.iimgs img.tp{background:none;box-shadow:none;object-fit:contain;aspect-ratio:auto}
+.imgs .imc img.tp{object-fit:contain}
 .it.imgover,.lib-it.imgover{outline:3px dashed var(--accent);outline-offset:2px;z-index:5}
 .it:has(.bd>*) .n{padding-right:30px}.it:has(.bd>*:only-child) .n{padding-right:16px}
 .it .ds.clamp{display:-webkit-box;-webkit-box-orient:vertical}
@@ -2481,8 +2483,8 @@ function drawWeekPage(doc,c,m,pi){
         let{nl,dl}=lay(tw);
         /* billedet får pladsen under teksten (sidste prioritet); er der for lidt, lægges det lille i hjørnet som før */
         if(pim){const top=iy+4.5+(nl.length-1)*3.7+(dl.length?3.7+(dl.length-1)*3.1:0)+2.5;const avH=iy+ih-2-(LK.length?lkH+1.5:0)-top;
-          if(avH>=12){let pw=iw-4,ph=pw/ar;if(ph>avH){ph=avH;pw=ph*ar}try{doc.addImage(pim,'JPEG',ix+(iw-pw)/2,top,pw,ph,undefined,'FAST')}catch(e){}}
-          else if(iw>=40&&ih>=14){let pw=Math.min(iw*.42,26),ph=pw/ar;if(ph>ih-4){ph=ih-4;pw=ph*ar}try{doc.addImage(pim,'JPEG',ix+iw-pw-1.5,iy+ih-ph-2,pw,ph,undefined,'FAST');tw=iw-4-pw-1.5;({nl,dl}=lay(tw))}catch(e){}}}
+          if(avH>=12){let pw=iw-4,ph=pw/ar;if(ph>avH){ph=avH;pw=ph*ar}try{doc.addImage(pim,/^data:image\/png/.test(pim)?'PNG':'JPEG',ix+(iw-pw)/2,top,pw,ph,undefined,'FAST')}catch(e){}}
+          else if(iw>=40&&ih>=14){let pw=Math.min(iw*.42,26),ph=pw/ar;if(ph>ih-4){ph=ih-4;pw=ph*ar}try{doc.addImage(pim,/^data:image\/png/.test(pim)?'PNG':'JPEG',ix+iw-pw-1.5,iy+ih-ph-2,pw,ph,undefined,'FAST');tw=iw-4-pw-1.5;({nl,dl}=lay(tw))}catch(e){}}}
         doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(nl,ix+2,iy+4.5);
         if(dl.length){doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.text(dl,ix+2,iy+4.5+nl.length*3.7)}
         if(LK.length&&ih>=12){doc.setFont('helvetica','bold');doc.setFontSize(7);LK.forEach((l,j)=>{const ly=iy+ih-2-(LK.length-1-j)*3.2;const lab=doc.splitTextToSize(pdfTxt('> '+linkLabel(l)),tw)[0];doc.textWithLink(lab,ix+2,ly,{url:safeHref(l.url)});const w=doc.getTextWidth(lab);doc.setDrawColor(tc,tc,tc);doc.setLineWidth(.15);doc.line(ix+2,ly+.6,ix+2+w,ly+.6)})}}
@@ -2607,7 +2609,7 @@ function fitBlocks(root){
     if(n<1){ds.remove();return}ds.classList.add('clamp');ds.style.webkitLineClamp=n;ds.style.maxHeight=(n*lh)+'px';
   });
 }
-function blockThumbs(i){const L=i.images||[];const show=L.slice(0,3);return`<span class="iimgs">${show.map(id=>imgSrc(id)?`<img src="${imgSrc(id)}" alt="" data-imgview="${id}" data-cap="${esc(i.name)}" draggable="false">`:`<span class="imiss" title="Billedet ligger i arbejdsfilen">${ICON.img}</span>`).join('')}${L.length>3?`<span class="more">+${L.length-3}</span>`:''}</span>`}
+function blockThumbs(i){const L=i.images||[];const show=L.slice(0,3);return`<span class="iimgs">${show.map(id=>imgSrc(id)?`<img class="${/^data:image\/png/.test(imgSrc(id))?'tp':''}" src="${imgSrc(id)}" alt="" data-imgview="${id}" data-cap="${esc(i.name)}" draggable="false">`:`<span class="imiss" title="Billedet ligger i arbejdsfilen">${ICON.img}</span>`).join('')}${L.length>3?`<span class="more">+${L.length-3}</span>`:''}</span>`}
 function imagesEditor(o,who){const L=o.images||[];const can=imgCanAdd();
   const info='Ulempe: Arbejdsfilen bliver større, ca. 5 MB pr. 100 billeder. Det er fint, når man gemmer i fil, men browserens eget lager har plads til meget lidt. Billeder kræver derfor, at man har valgt „Gem automatisk i en fil“.';
   let add;
@@ -2615,9 +2617,9 @@ function imagesEditor(o,who){const L=o.images||[];const can=imgCanAdd();
   else if(pendingHandle)add=`<div class="guide small">${esc(info)}<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" data-imgconnect>Fortsæt i ${esc(pendingHandle.name)}</button></div></div>`;
   else if(fsOK)add=`<div class="guide small">${esc(info)}<div class="btnrow" style="margin-top:6px"><button class="btn sm primary" data-imgconnect>Gem automatisk i en fil…</button></div></div>`;
   else add=`<div class="guide small">${esc(info)} Det kan kun lade sig gøre i Chrome eller Edge.</div>`;
-  return`<div class="fld"><span class="lbl-s">Billeder <span class="muted" style="font-weight:400">– fx tegninger eller fotos af emner</span></span><div class="imgdrop" data-imgdrop="${who}">${L.length?`<div class="imgs">${L.map((id,k)=>`<div class="imc">${imgSrc(id)?`<img src="${imgSrc(id)}" alt="Billede ${k+1}" data-imgview="${id}" data-cap="${esc(o.name)}">`:`<span class="imiss">Billedet ligger i arbejdsfilen</span>`}<button class="btn sm" data-rmimg="${k}" data-who="${who}" aria-label="Fjern billede">✕</button></div>`).join('')}</div>`:''}${add}</div></div>`}
+  return`<div class="fld"><span class="lbl-s">Billeder <span class="muted" style="font-weight:400">– fx tegninger eller fotos af emner</span></span><div class="imgdrop" data-imgdrop="${who}">${L.length?`<div class="imgs">${L.map((id,k)=>`<div class="imc">${imgSrc(id)?`<img class="${/^data:image\/png/.test(imgSrc(id))?'tp':''}" src="${imgSrc(id)}" alt="Billede ${k+1}" data-imgview="${id}" data-cap="${esc(o.name)}">`:`<span class="imiss">Billedet ligger i arbejdsfilen</span>`}<button class="btn sm" data-rmimg="${k}" data-who="${who}" aria-label="Fjern billede">✕</button></div>`).join('')}</div>`:''}${add}</div></div>`}
 function compressImage(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const im=new Image();
-  im.onload=()=>{let w=im.naturalWidth,h=im.naturalHeight;if(!w||!h){URL.revokeObjectURL(u);rej(new Error('size'));return}const f=Math.min(1,IMG_MAX/Math.max(w,h));w=Math.max(1,Math.round(w*f));h=Math.max(1,Math.round(h*f));const cv=document.createElement('canvas');cv.width=w;cv.height=h;const g=cv.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,w,h);g.drawImage(im,0,0,w,h);URL.revokeObjectURL(u);res(cv.toDataURL('image/jpeg',IMG_Q))};
+  im.onload=()=>{let w=im.naturalWidth,h=im.naturalHeight;if(!w||!h){URL.revokeObjectURL(u);rej(new Error('size'));return}const f=Math.min(1,IMG_MAX/Math.max(w,h));w=Math.max(1,Math.round(w*f));h=Math.max(1,Math.round(h*f));const cv=document.createElement('canvas');cv.width=w;cv.height=h;const g=cv.getContext('2d');g.drawImage(im,0,0,w,h);URL.revokeObjectURL(u);let tp=false;try{const a=g.getImageData(0,0,w,h).data;for(let q=3;q<a.length;q+=16)if(a[q]<245){tp=true;break}}catch(e){}if(tp){res(cv.toDataURL('image/png'));return}g.globalCompositeOperation='destination-over';g.fillStyle='#fff';g.fillRect(0,0,w,h);res(cv.toDataURL('image/jpeg',IMG_Q))};
   im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('load'))};im.src=u})}
 async function addImages(who,files){
   const o=linkTarget(who);if(!o)return;
